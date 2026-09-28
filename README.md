@@ -57,7 +57,7 @@ upstream module. Bug reports should name the core and module revisions, the
 bot's class and level, and the behavior you saw. Keep credentials, client
 files, database dumps, and private-server packages out of issues.
 
-The upstream Playerbots code remains GPLv2; this port keeps its license and
-author credits. [PORTING.md](PORTING.md) records the donor revision and the
+The retained source headers specify GPL version 2 or later; this port keeps
+the license and author credits. [PORTING.md](PORTING.md) records the donor revision and the
 changes needed for Cata. See also [LICENSE](LICENSE) and
 [AUTHORS.md](AUTHORS.md).

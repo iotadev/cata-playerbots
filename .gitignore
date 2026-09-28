@@ -1,0 +1,8 @@
+# Keep generated builds, active configuration, and test credentials local.
+build*/
+cmake-build-*/
+*.conf
+*.log
+*.bak
+test-db-credentials.json
+test-login.txt

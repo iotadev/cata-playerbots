@@ -1,5 +1,10 @@
 # Port provenance and remaining work
 
+This is a chronological porting record. Each section describes its dated
+milestone; later sections supersede earlier "not yet wired" and "next" notes.
+The latest session-adapter section documents the default-off Warrior buff
+experiment. See [README.md](README.md) for the current supported gameplay slice.
+
 Foundation extraction: 2026-09-26, from this fork's existing dirty Cata prototype
 on base `efcf6ac83d11fdf4ce86a1b6f95c3b22dfaee14f`. The preserved pre-extraction
 files are under ignored `build/module-foundation-baseline-20260926`. Source notices
