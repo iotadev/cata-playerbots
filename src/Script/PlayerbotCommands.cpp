@@ -1,0 +1,561 @@
+/*
+ * This file is part of the TrinityCore Project. See AUTHORS file for Copyright information.
+ * Released under GNU GPL v2 or any later version.
+ */
+#include "PlayerbotModuleCommands.h"
+#include "Chat.h"
+#include "RBAC.h"
+#include "World.h"
+#include "WorldSession.h"
+#include <cerrno>
+#include <cstdlib>
+#include <limits>
+#include <sstream>
+namespace
+{
+class PlayerbotDevCommands
+{
+public:
+    static std::vector<ChatCommand> GetCommands()
+    {
+        static std::vector<ChatCommand> devPlayerbotCommandTable =
+        {
+            { "start",  rbac::RBAC_PERM_COMMAND_SERVER_DEBUG, true, &HandleDevPlayerbotStartCommand,  "" },
+            { "stop",   rbac::RBAC_PERM_COMMAND_SERVER_DEBUG, true, &HandleDevPlayerbotStopCommand,   "" },
+            { "follow", rbac::RBAC_PERM_COMMAND_SERVER_DEBUG, true, &HandleDevPlayerbotFollowCommand, "" },
+            { "hold",   rbac::RBAC_PERM_COMMAND_SERVER_DEBUG, true, &HandleDevPlayerbotHoldCommand,   "" },
+            { "attack", rbac::RBAC_PERM_COMMAND_SERVER_DEBUG, true, &HandleDevPlayerbotAttackCommand, "" },
+            { "cease",  rbac::RBAC_PERM_COMMAND_SERVER_DEBUG, true, &HandleDevPlayerbotCeaseCommand,  "" },
+            { "joininstance", rbac::RBAC_PERM_COMMAND_SERVER_DEBUG, true, &HandleDevPlayerbotJoinInstanceCommand, "" },
+            { "status", rbac::RBAC_PERM_COMMAND_SERVER_DEBUG, true, &HandleDevPlayerbotStatusCommand, "" },
+            { "start2", rbac::RBAC_PERM_COMMAND_SERVER_DEBUG, true, &HandleDevPlayerbotStart2Command, "" },
+            { "stop2", rbac::RBAC_PERM_COMMAND_SERVER_DEBUG, true, &HandleDevPlayerbotStop2Command, "" },
+            { "follow2", rbac::RBAC_PERM_COMMAND_SERVER_DEBUG, true, &HandleDevPlayerbotFollow2Command, "" },
+            { "hold2", rbac::RBAC_PERM_COMMAND_SERVER_DEBUG, true, &HandleDevPlayerbotHold2Command, "" },
+            { "attack2", rbac::RBAC_PERM_COMMAND_SERVER_DEBUG, true, &HandleDevPlayerbotAttack2Command, "" },
+            { "cease2", rbac::RBAC_PERM_COMMAND_SERVER_DEBUG, true, &HandleDevPlayerbotCease2Command, "" },
+            { "joininstance2", rbac::RBAC_PERM_COMMAND_SERVER_DEBUG, true, &HandleDevPlayerbotJoinInstance2Command, "" },
+            { "status2", rbac::RBAC_PERM_COMMAND_SERVER_DEBUG, true, &HandleDevPlayerbotStatus2Command, "" },
+            { "slot", rbac::RBAC_PERM_COMMAND_SERVER_DEBUG, true, &HandleDevPlayerbotSlotCommand, "" },
+        };
+
+        return devPlayerbotCommandTable;
+    }
+    static bool HandleDevPlayerbotStartCommand(ChatHandler* handler, char const* /*args*/)
+    {
+        if (handler->GetSession())
+        {
+            handler->SendSysMessage("PB-00 controls are console-only during the lifecycle proof.");
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        if (!sWorld->TryStartDevPlayerbot())
+        {
+            handler->SendSysMessage("PB-00 start rejected; check the feature flag, dedicated account/supported-class GUID, admission rules, and shutdown state.");
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        handler->SendSysMessage("PB-00 session admitted; character loading is asynchronous. Use .server playerbotdev status to check progress.");
+        return true;
+    }
+
+    static bool HandleDevPlayerbotStopCommand(ChatHandler* handler, char const* /*args*/)
+    {
+        if (handler->GetSession())
+        {
+            handler->SendSysMessage("PB-00 controls are console-only during the lifecycle proof.");
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        if (!sWorld->RequestStopDevPlayerbot())
+        {
+            handler->SendSysMessage("No PB-00 session is active.");
+            return true;
+        }
+
+        handler->SendSysMessage("PB-00 exit requested; save/logout will run in the next safe world-session update.");
+        return true;
+    }
+
+    static bool HandleDevPlayerbotFollowCommand(ChatHandler* handler, char const* args)
+    {
+        if (handler->GetSession())
+        {
+            handler->SendSysMessage("PB-01 controls are console-only.");
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        char* end = nullptr;
+        errno = 0;
+        unsigned long guidLow = args ? std::strtoul(args, &end, 10) : 0;
+        if (!args || !*args || !end || *end || errno || !guidLow || guidLow > std::numeric_limits<uint32>::max())
+        {
+            handler->SendSysMessage("Usage: server playerbotdev follow <player character GUID>");
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        uint32 accountId = sWorld->getIntConfig(CONFIG_PLAYERBOTS_DEV_ACCOUNT_ID);
+        WorldSession* bot = accountId ? sWorld->FindSession(accountId) : nullptr;
+        if (!bot || !bot->IsServerOrigin() || !bot->GetPlayer())
+        {
+            handler->SendSysMessage("PB-01 bot is not in world; start it first.");
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        bot->RequestServerOriginFollow(uint32(guidLow));
+        handler->PSendSysMessage("PB-01 follow requested for character GUID %u; target must be alive on the bot's map.", uint32(guidLow));
+        return true;
+    }
+
+    static bool HandleDevPlayerbotHoldCommand(ChatHandler* handler, char const* /*args*/)
+    {
+        if (handler->GetSession())
+        {
+            handler->SendSysMessage("PB-01 controls are console-only.");
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        uint32 accountId = sWorld->getIntConfig(CONFIG_PLAYERBOTS_DEV_ACCOUNT_ID);
+        WorldSession* bot = accountId ? sWorld->FindSession(accountId) : nullptr;
+        if (!bot || !bot->IsServerOrigin() || !bot->GetPlayer())
+        {
+            handler->SendSysMessage("No in-world PB-01 bot is active.");
+            return true;
+        }
+
+        bot->RequestServerOriginHold();
+        handler->SendSysMessage("PB-01 hold requested.");
+        return true;
+    }
+
+    static bool HandleDevPlayerbotAttackCommand(ChatHandler* handler, char const* /*args*/)
+    {
+        if (handler->GetSession())
+        {
+            handler->SendSysMessage("PB-02 controls are console-only.");
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        uint32 accountId = sWorld->getIntConfig(CONFIG_PLAYERBOTS_DEV_ACCOUNT_ID);
+        WorldSession* bot = accountId ? sWorld->FindSession(accountId) : nullptr;
+        if (!bot || !bot->IsServerOrigin() || !bot->GetPlayer() || !bot->GetServerOriginFollowTargetGuidLow())
+        {
+            handler->SendSysMessage("PB-02 attack requires an in-world bot following a human owner.");
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        bot->RequestServerOriginAttack();
+        handler->SendSysMessage("PB-02 attack requested for the owner's selected nearby hostile creature.");
+        return true;
+    }
+
+    static bool HandleDevPlayerbotCeaseCommand(ChatHandler* handler, char const* /*args*/)
+    {
+        if (handler->GetSession())
+        {
+            handler->SendSysMessage("PB-02 controls are console-only.");
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        uint32 accountId = sWorld->getIntConfig(CONFIG_PLAYERBOTS_DEV_ACCOUNT_ID);
+        WorldSession* bot = accountId ? sWorld->FindSession(accountId) : nullptr;
+        if (!bot || !bot->IsServerOrigin() || !bot->GetPlayer())
+        {
+            handler->SendSysMessage("No in-world PB-02 bot is active.");
+            return true;
+        }
+
+        bot->RequestServerOriginCease();
+        handler->SendSysMessage("PB-02 cease-fire requested; follow will resume if the owner remains on-map.");
+        return true;
+    }
+
+    static bool HandleDevPlayerbotJoinInstanceCommand(ChatHandler* handler, char const* args)
+    {
+        if (handler->GetSession())
+        {
+            handler->SendSysMessage("PB-PARTY dungeon transfer is console-only.");
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        char* end = nullptr;
+        errno = 0;
+        unsigned long mapId = args ? std::strtoul(args, &end, 10) : 0;
+        if (!args || !*args || !end || *end || errno || !mapId || mapId > std::numeric_limits<uint32>::max())
+        {
+            handler->SendSysMessage("Usage: server playerbotdev joininstance <dungeon map ID>");
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        uint32 accountId = sWorld->getIntConfig(CONFIG_PLAYERBOTS_DEV_ACCOUNT_ID);
+        WorldSession* bot = accountId ? sWorld->FindSession(accountId) : nullptr;
+        if (!bot || !bot->IsServerOrigin() || !bot->GetPlayer())
+        {
+            handler->SendSysMessage("PB-PARTY dungeon transfer requires an in-world bot.");
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        bot->RequestServerOriginInstanceJoin(uint32(mapId));
+        handler->PSendSysMessage("PB-PARTY requested dungeon map %u; the bot will validate its party and core entry rights.", uint32(mapId));
+        return true;
+    }
+
+    static bool HandleDevPlayerbotStatusCommand(ChatHandler* handler, char const* /*args*/)
+    {
+        if (handler->GetSession())
+        {
+            handler->SendSysMessage("PB-00 controls are console-only during the lifecycle proof.");
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        if (!sWorld->getBoolConfig(CONFIG_PLAYERBOTS_DEV_ENABLED))
+        {
+            handler->SendSysMessage("PB-00 is disabled in configuration.");
+            return true;
+        }
+
+        uint32 accountId = sWorld->getIntConfig(CONFIG_PLAYERBOTS_DEV_ACCOUNT_ID);
+        WorldSession* session = accountId ? sWorld->FindSession(accountId) : nullptr;
+        if (!session || !session->IsServerOrigin())
+        {
+            handler->SendSysMessage("No PB-00 session is active.");
+            return true;
+        }
+
+        char const* state = "created";
+        switch (session->GetInitializationState())
+        {
+            case WorldSessionInitializationState::Created: break;
+            case WorldSessionInitializationState::Loading: state = "account loading"; break;
+            case WorldSessionInitializationState::Ready: state = session->GetPlayer() ? "character in world" : "character loading"; break;
+            case WorldSessionInitializationState::Failed: state = "initialization failed"; break;
+        }
+
+        handler->PSendSysMessage("PB-00 session: %s%s.", state, session->PlayerLoading() ? " (login query pending)" : "");
+        if (uint32 ownerGuid = session->GetServerOriginFollowTargetGuidLow())
+            handler->PSendSysMessage("PB-01 following character GUID %u.", ownerGuid);
+        else
+            handler->SendSysMessage("PB-01 holding.");
+        handler->PSendSysMessage("PB-02 %s.", session->IsServerOriginAttacking() ? "attacking" : "not attacking");
+        return true;
+    }
+
+    static WorldSession* GetDevPlayerbot2()
+    {
+        uint32 accountId = sWorld->getIntConfig(CONFIG_PLAYERBOTS_DEV_ACCOUNT_ID_2);
+        uint32 configuredGuid = sWorld->getIntConfig(CONFIG_PLAYERBOTS_DEV_CHARACTER_GUID_2);
+        WorldSession* session = accountId ? sWorld->FindSession(accountId) : nullptr;
+        return session && session->IsServerOrigin() && session->GetServerOriginCharacterGuid().GetCounter() == configuredGuid ? session : nullptr;
+    }
+
+    static bool CheckDevPlayerbot2Console(ChatHandler* handler)
+    {
+        if (!handler->GetSession())
+            return true;
+
+        handler->SendSysMessage("Playerbot development controls are console-only.");
+        handler->SetSentErrorMessage(true);
+        return false;
+    }
+
+    static bool ParseDevPlayerbot2Id(ChatHandler* handler, char const* args, char const* usage, uint32& id)
+    {
+        char* end = nullptr;
+        errno = 0;
+        unsigned long parsed = args ? std::strtoul(args, &end, 10) : 0;
+        if (!args || !*args || !end || *end || errno || !parsed || parsed > std::numeric_limits<uint32>::max())
+        {
+            handler->SendSysMessage(usage);
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        id = uint32(parsed);
+        return true;
+    }
+
+    static bool HandleDevPlayerbotStart2Command(ChatHandler* handler, char const* /*args*/)
+    {
+        if (!CheckDevPlayerbot2Console(handler))
+            return false;
+
+        if (!sWorld->TryStartDevPlayerbot(true))
+        {
+            handler->SendSysMessage("Second bot start rejected; check feature flag, distinct dedicated account/supported-class GUID, admission rules, and shutdown state.");
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        handler->SendSysMessage("Second bot session admitted; character loading is asynchronous. Use .server playerbotdev status2.");
+        return true;
+    }
+
+    static bool HandleDevPlayerbotStop2Command(ChatHandler* handler, char const* /*args*/)
+    {
+        if (!CheckDevPlayerbot2Console(handler))
+            return false;
+
+        if (sWorld->RequestStopDevPlayerbot(true))
+            handler->SendSysMessage("Second bot exit requested; save/logout will run in the next safe world-session update.");
+        else
+            handler->SendSysMessage("No second bot session is active.");
+        return true;
+    }
+
+    static bool HandleDevPlayerbotFollow2Command(ChatHandler* handler, char const* args)
+    {
+        if (!CheckDevPlayerbot2Console(handler))
+            return false;
+
+        uint32 ownerGuid;
+        if (!ParseDevPlayerbot2Id(handler, args, "Usage: server playerbotdev follow2 <player character GUID>", ownerGuid))
+            return false;
+
+        WorldSession* bot = GetDevPlayerbot2();
+        if (!bot || !bot->GetPlayer())
+        {
+            handler->SendSysMessage("Second bot is not in world; start it first.");
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        bot->RequestServerOriginFollow(ownerGuid);
+        handler->PSendSysMessage("Second bot follow requested for character GUID %u; target must be alive on the bot's map.", ownerGuid);
+        return true;
+    }
+
+    static bool HandleDevPlayerbotHold2Command(ChatHandler* handler, char const* /*args*/)
+    {
+        if (!CheckDevPlayerbot2Console(handler))
+            return false;
+
+        WorldSession* bot = GetDevPlayerbot2();
+        if (bot && bot->GetPlayer())
+        {
+            bot->RequestServerOriginHold();
+            handler->SendSysMessage("Second bot hold requested.");
+        }
+        else
+            handler->SendSysMessage("No in-world second bot is active.");
+        return true;
+    }
+
+    static bool HandleDevPlayerbotAttack2Command(ChatHandler* handler, char const* /*args*/)
+    {
+        if (!CheckDevPlayerbot2Console(handler))
+            return false;
+
+        WorldSession* bot = GetDevPlayerbot2();
+        if (!bot || !bot->GetPlayer() || !bot->GetServerOriginFollowTargetGuidLow())
+        {
+            handler->SendSysMessage("Second bot attack requires an in-world bot following a human owner.");
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        bot->RequestServerOriginAttack();
+        handler->SendSysMessage("Second bot attack requested for the owner's selected nearby hostile creature.");
+        return true;
+    }
+
+    static bool HandleDevPlayerbotCease2Command(ChatHandler* handler, char const* /*args*/)
+    {
+        if (!CheckDevPlayerbot2Console(handler))
+            return false;
+
+        WorldSession* bot = GetDevPlayerbot2();
+        if (bot && bot->GetPlayer())
+        {
+            bot->RequestServerOriginCease();
+            handler->SendSysMessage("Second bot cease-fire requested; follow will resume if owner remains on-map.");
+        }
+        else
+            handler->SendSysMessage("No in-world second bot is active.");
+        return true;
+    }
+
+    static bool HandleDevPlayerbotJoinInstance2Command(ChatHandler* handler, char const* args)
+    {
+        if (!CheckDevPlayerbot2Console(handler))
+            return false;
+
+        uint32 mapId;
+        if (!ParseDevPlayerbot2Id(handler, args, "Usage: server playerbotdev joininstance2 <dungeon map ID>", mapId))
+            return false;
+
+        WorldSession* bot = GetDevPlayerbot2();
+        if (!bot || !bot->GetPlayer())
+        {
+            handler->SendSysMessage("Second bot dungeon transfer requires an in-world bot.");
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        bot->RequestServerOriginInstanceJoin(mapId);
+        handler->PSendSysMessage("Second bot requested dungeon map %u; party and entry rights will be validated.", mapId);
+        return true;
+    }
+
+    static bool HandleDevPlayerbotStatus2Command(ChatHandler* handler, char const* /*args*/)
+    {
+        if (!CheckDevPlayerbot2Console(handler))
+            return false;
+
+        if (!sWorld->getBoolConfig(CONFIG_PLAYERBOTS_DEV_ENABLED))
+        {
+            handler->SendSysMessage("Playerbot development is disabled in configuration.");
+            return true;
+        }
+
+        uint32 accountId = sWorld->getIntConfig(CONFIG_PLAYERBOTS_DEV_ACCOUNT_ID_2);
+        uint32 configuredGuid = sWorld->getIntConfig(CONFIG_PLAYERBOTS_DEV_CHARACTER_GUID_2);
+        if (!accountId || !configuredGuid)
+        {
+            handler->SendSysMessage("Second bot is not configured (AccountId2 and CharacterGuid2 required).");
+            return true;
+        }
+
+        WorldSession* session = GetDevPlayerbot2();
+        if (!session)
+        {
+            handler->SendSysMessage("No second bot session is active.");
+            return true;
+        }
+
+        char const* state = "created";
+        switch (session->GetInitializationState())
+        {
+            case WorldSessionInitializationState::Created: break;
+            case WorldSessionInitializationState::Loading: state = "account loading"; break;
+            case WorldSessionInitializationState::Ready: state = session->GetPlayer() ? "character in world" : "character loading"; break;
+            case WorldSessionInitializationState::Failed: state = "initialization failed"; break;
+        }
+
+        handler->PSendSysMessage("Second bot session: %s%s.", state, session->PlayerLoading() ? " (login query pending)" : "");
+        if (uint32 ownerGuid = session->GetServerOriginFollowTargetGuidLow())
+            handler->PSendSysMessage("Second bot following character GUID %u.", ownerGuid);
+        else
+            handler->SendSysMessage("Second bot holding.");
+        handler->PSendSysMessage("Second bot %s.", session->IsServerOriginAttacking() ? "attacking" : "not attacking");
+        return true;
+    }
+
+    // Compact multi-bot control for the full-party development replay. The
+    // original one- and two-bot commands remain available for older scripts.
+    static bool HandleDevPlayerbotSlotCommand(ChatHandler* handler, char const* args)
+    {
+        if (!CheckDevPlayerbot2Console(handler))
+            return false;
+
+        std::istringstream input(args ? args : "");
+        uint32 slot = 0;
+        std::string action;
+        if (!(input >> slot >> action) || slot < 1 || slot > 4)
+        {
+            handler->SendSysMessage("Usage: server playerbotdev slot <1-4> <start|stop|status|follow|hold|attack|cease|joininstance> [character GUID or dungeon map ID]");
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        bool needsId = action == "follow" || action == "joininstance";
+        uint32 id = 0;
+        if (needsId && (!(input >> id) || !id))
+        {
+            handler->SendSysMessage("This slot action requires a nonzero character GUID or dungeon map ID.");
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+        input >> std::ws;
+        if (!input.eof())
+        {
+            handler->SendSysMessage("Unexpected extra slot-command argument.");
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        uint8 slotId = uint8(slot);
+        if (action == "start")
+        {
+            if (!sWorld->TryStartDevPlayerbotSlot(slotId))
+            {
+                handler->PSendSysMessage("Playerbot slot %u start rejected; check distinct allowlisted account, supported-class GUID, and admission rules.", slot);
+                handler->SetSentErrorMessage(true);
+                return false;
+            }
+            handler->PSendSysMessage("Playerbot slot %u admitted; character loading is asynchronous.", slot);
+            return true;
+        }
+        if (action == "stop")
+        {
+            handler->PSendSysMessage("Playerbot slot %u %s.", slot,
+                sWorld->RequestStopDevPlayerbotSlot(slotId) ? "exit requested" : "is not active");
+            return true;
+        }
+
+        WorldSession* bot = sWorld->FindDevPlayerbotSlot(slotId);
+        if (action == "status")
+        {
+            if (!bot)
+                handler->PSendSysMessage("Playerbot slot %u is not active.", slot);
+            else
+                handler->PSendSysMessage("Playerbot slot %u: %s; character %s; follow GUID %u; %s.", slot,
+                    bot->PlayerLoading() ? "loading" : "ready", bot->GetPlayer() ? "in world" : "not in world",
+                    bot->GetServerOriginFollowTargetGuidLow(), bot->IsServerOriginAttacking() ? "attacking" : "not attacking");
+            return true;
+        }
+        if (!bot || !bot->GetPlayer())
+        {
+            handler->PSendSysMessage("Playerbot slot %u requires an in-world bot.", slot);
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+        if (action == "follow")
+            bot->RequestServerOriginFollow(id);
+        else if (action == "hold")
+            bot->RequestServerOriginHold();
+        else if (action == "attack")
+        {
+            if (!bot->GetServerOriginFollowTargetGuidLow())
+            {
+                handler->SendSysMessage("Attack requires a followed human owner.");
+                handler->SetSentErrorMessage(true);
+                return false;
+            }
+            bot->RequestServerOriginAttack();
+        }
+        else if (action == "cease")
+            bot->RequestServerOriginCease();
+        else if (action == "joininstance")
+            bot->RequestServerOriginInstanceJoin(id);
+        else
+        {
+            handler->SendSysMessage("Unknown slot action.");
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        handler->PSendSysMessage("Playerbot slot %u %s requested.", slot, action.c_str());
+        return true;
+    }
+
+    // Triggering corpses expire check in world
+};
+}
+std::vector<ChatCommand> GetPlayerbotModuleCommands()
+{
+    return PlayerbotDevCommands::GetCommands();
+}

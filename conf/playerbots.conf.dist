@@ -1,0 +1,74 @@
+[playerbots]
+
+# Optional mod-playerbots configuration. These values override legacy options
+# in worldserver.conf. Missing files retain legacy settings and compiled defaults.
+
+#
+#    Playerbots.Dev.Enabled
+#        Description: Enables the isolated server-origin development bots.
+#                     All configured bot accounts are reserved from human-client login while enabled.
+#                     This is a manual development control, not a bot population system.
+#        Default:     0 - (Disabled)
+#                     1 - (Enabled)
+
+Playerbots.Dev.Enabled = 0
+
+#
+#    Playerbots.Dev.GreetingOnJoin
+#        Description: Have an admitted Playerbot whisper a short greeting when
+#                     it accepts an eligible human player's party invitation.
+#        Default:     1 - (Enabled while Playerbots.Dev.Enabled is on)
+
+Playerbots.Dev.GreetingOnJoin = 1
+
+#
+#    Playerbots.Dev.EngineWarriorBuff
+#        Description: Experimental Warrior out-of-combat Battle Shout path via
+#                     the imported Playerbots engine. Replaces only the existing
+#                     Battle Shout maintenance call; does not enable combat AI.
+#                     Requires a server restart to compare paths reliably.
+#        Default:     0 - (Existing companion buff behavior)
+
+Playerbots.Dev.EngineWarriorBuff = 0
+
+#
+#    Playerbots.Dev.AccountId
+#        Description: Dedicated ordinary-player account used only by PB-00.
+#        Default:     0 - (Not configured)
+
+Playerbots.Dev.AccountId = 0
+
+#
+#    Playerbots.Dev.CharacterGuid
+#        Description: Offline Warrior, Mage, or Priest GUID owned by Playerbots.Dev.AccountId.
+#        Default:     0 - (Not configured)
+
+Playerbots.Dev.CharacterGuid = 0
+
+#
+#    Playerbots.Dev.AccountId2
+#        Description: Optional second dedicated ordinary-player account; must differ from AccountId.
+#        Default:     0 - (Not configured)
+
+Playerbots.Dev.AccountId2 = 0
+
+#
+#    Playerbots.Dev.CharacterGuid2
+#        Description: Offline Warrior, Mage, or Priest GUID owned by AccountId2;
+#                     must differ from CharacterGuid.
+#        Default:     0 - (Not configured)
+
+Playerbots.Dev.CharacterGuid2 = 0
+
+#
+#    Playerbots.Dev.AccountId3 / Playerbots.Dev.CharacterGuid3
+#    Playerbots.Dev.AccountId4 / Playerbots.Dev.CharacterGuid4
+#        Description: Optional third and fourth dedicated ordinary-player bot slots.
+#                     Supported classes are Warrior, Mage, and Priest.
+#                     Every configured account and character GUID must be distinct.
+#        Default:     0 - (Not configured)
+
+Playerbots.Dev.AccountId3 = 0
+Playerbots.Dev.CharacterGuid3 = 0
+Playerbots.Dev.AccountId4 = 0
+Playerbots.Dev.CharacterGuid4 = 0
