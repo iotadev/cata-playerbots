@@ -107,3 +107,23 @@ Playerbots.Dev.AccountId3 = 0
 Playerbots.Dev.CharacterGuid3 = 0
 Playerbots.Dev.AccountId4 = 0
 Playerbots.Dev.CharacterGuid4 = 0
+
+#
+#    Playerbots.Managed.Enabled
+#        Description: Permit console-managed admission of existing characters.
+#                     No characters are connected automatically at startup.
+#                     Listing and stopping configured bots remain available
+#                     when admission is disabled.
+#        Default:     0 - (Disabled)
+
+Playerbots.Managed.Enabled = 0
+
+#
+#    Playerbots.Managed.Characters
+#        Description: Comma-separated accountId:characterGuid pairs, for example
+#                     101:2001,102:2002. Each account and character must be unique.
+#                     Characters must already exist and pass native admission checks.
+#                     This identifies managed accounts, not their party controllers.
+#        Default:     (empty)
+
+Playerbots.Managed.Characters =

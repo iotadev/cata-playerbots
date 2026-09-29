@@ -4,7 +4,9 @@
  */
 #include "PlayerbotSessionHooks.h"
 #include "PlayerbotConfig.h"
+#include "PlayerbotManagedRoster.h"
 #include "Config.h"
+#include "Log.h"
 #include "World.h"
 bool PlayerbotModuleEngineWarriorBuffEnabled()
 {
@@ -30,6 +32,11 @@ void LoadPlayerbotModuleSettings(World& world, bool moduleConfigsValid)
 {
     world.setBoolConfig(CONFIG_PLAYERBOTS_DEV_ENABLED, moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.Dev.Enabled", false));
     world.setBoolConfig(CONFIG_PLAYERBOTS_DEV_GREETING_ENABLED, sConfigMgr->GetBoolDefault("Playerbots.Dev.GreetingOnJoin", true));
+    bool managedRosterValid = PlayerbotManagedRoster::Configure(sConfigMgr->GetStringDefault("Playerbots.Managed.Characters", ""));
+    if (!managedRosterValid)
+        TC_LOG_ERROR("module.playerbots", "Playerbots.Managed.Characters has invalid or duplicate account:character bindings; managed admission disabled.");
+    world.setBoolConfig(CONFIG_PLAYERBOTS_MANAGED_ENABLED, moduleConfigsValid && managedRosterValid &&
+        sConfigMgr->GetBoolDefault("Playerbots.Managed.Enabled", false));
     int32 devPlayerbotAccountId = sConfigMgr->GetIntDefault("Playerbots.Dev.AccountId", 0);
     int32 devPlayerbotCharacterGuid = sConfigMgr->GetIntDefault("Playerbots.Dev.CharacterGuid", 0);
     world.setIntConfig(CONFIG_PLAYERBOTS_DEV_ACCOUNT_ID, devPlayerbotAccountId > 0 ? uint32(devPlayerbotAccountId) : 0);

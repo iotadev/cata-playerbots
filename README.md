@@ -30,6 +30,13 @@ death recovery, or full class/spec rotations.
 Bot accounts and characters are still supplied manually; autonomous population,
 questing, and world progression have not been ported.
 
+An initial managed existing-character roster is also present. When explicitly
+enabled, a console operator can list configured account/character pairs and
+request native login or logout with `server playerbotdev managed list`,
+`start <character GUID>`, and `stop <character GUID>`. It does not create
+characters, connect them automatically, or grant a human control based on
+account ownership. This path has not had an in-game managed-roster check yet.
+
 An experimental normal-whisper path accepts `follow`, `stay`, `attack`, and
 `stop` from the bot's authorized party controller; `list` shows that player's
 currently online controllable bots. The latest client test confirmed `list`
@@ -51,8 +58,9 @@ engine, contexts, actions, triggers, values, and strategies. Imported components
 and Cata-specific changes are tracked in [PORTING.md](PORTING.md). An imported
 component is not necessarily wired into live bot decisions.
 
-The next work is managed roster/login/logout and a first Cata MultiBot bridge,
-followed by character creation and broader donor behavior. The core maintains
+The next work is managed lifecycle outcomes, player authorization and a first
+Cata MultiBot bridge, followed by character creation and broader donor
+behavior. The core maintains
 the [roadmap](https://github.com/iotadev/TrinityCore/blob/master/doc/local/playerbots/PLAYERBOTS_PORT_ROADMAP.md)
 and [implementation handoff](https://github.com/iotadev/TrinityCore/blob/master/doc/local/playerbots/PLAYERBOTS_WORK_PACKETS.md).
 

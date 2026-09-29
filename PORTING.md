@@ -403,3 +403,37 @@ specific resume interaction remains a command-UX follow-up. Resurrection,
 controller death, removal/re-invite, full rotations and a dungeon clear were
 not verified in this session. No additional playtest is required merely to
 continue the manager/roster and addon infrastructure work.
+
+## Managed existing-character roster, first slice - 2026-09-29
+
+The source basis is upstream `src/Bot/PlayerbotMgr.{h,cpp}` at
+`7bae1b5c58c76a0aa20381155edc08096d1485b2`: separate bot identity from
+its temporary master, reject duplicates, and enter through native session
+loading. This is an adaptation of that ownership contract, not a copy of its
+query holder, guild/account-link permissions, command parser or random manager.
+Those donor services depend on WotLK-specific systems not yet present here.
+
+`PlayerbotManagedRoster` parses a bounded, unique set of configured
+account ID/character GUID pairs. The settings are default-off. Core
+`World::TryStartServerOriginPlayerbot` checks the existing character cache,
+account ownership, security, current online state, session and player limits,
+then uses the already established asynchronous Cata login path. It refuses to
+replace a human session. The numbered development slots now call this same
+entry point. A matching world-thread stop request uses the normal save/logout
+path.
+
+The combined worldserver build and 67 automated checks passed for this slice.
+The configured admission path itself still needs a disposable runtime check
+before describing its start/stop behavior as client-confirmed.
+
+The first management transport is console-only
+`server playerbotdev managed <list|start GUID|stop GUID>`. Listing reads the
+native character cache and active session; it never treats a party controller
+as an account owner. No ordinary player or addon connect permission is exposed
+by this command. Accepted start and stop requests report admission or queued
+exit, not confirmed completion. The enable flag gates new admissions; listing
+and stopping configured bots remain available when it is off. A later
+lifecycle manager needs durable
+pending/completed/failed outcomes, human-facing authorization, account
+provisioning and MultiBot mapping. This first slice has not had a live
+managed-roster session test.

@@ -3,11 +3,14 @@
  * Released under GNU GPL v2 or any later version.
  */
 #include "PlayerbotModuleCommands.h"
+#include "PlayerbotManagedRoster.h"
+#include "CharacterCache.h"
 #include "Chat.h"
 #include "RBAC.h"
 #include "World.h"
 #include "WorldSession.h"
 #include <cerrno>
+#include <charconv>
 #include <cstdlib>
 #include <limits>
 #include <sstream>
@@ -37,6 +40,7 @@ public:
             { "joininstance2", rbac::RBAC_PERM_COMMAND_SERVER_DEBUG, true, &HandleDevPlayerbotJoinInstance2Command, "" },
             { "status2", rbac::RBAC_PERM_COMMAND_SERVER_DEBUG, true, &HandleDevPlayerbotStatus2Command, "" },
             { "slot", rbac::RBAC_PERM_COMMAND_SERVER_DEBUG, true, &HandleDevPlayerbotSlotCommand, "" },
+            { "managed", rbac::RBAC_PERM_COMMAND_SERVER_DEBUG, true, &HandleManagedPlayerbotCommand, "" },
         };
 
         return devPlayerbotCommandTable;
@@ -549,6 +553,83 @@ public:
         }
 
         handler->PSendSysMessage("Playerbot slot %u %s requested.", slot, action.c_str());
+        return true;
+    }
+
+    static bool HandleManagedPlayerbotCommand(ChatHandler* handler, char const* args)
+    {
+        if (handler->GetSession())
+        {
+            handler->SendSysMessage("Managed Playerbot controls are console-only.");
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        std::istringstream input(args ? args : "");
+        std::string action;
+        std::string guidText;
+        std::string extra;
+        input >> action >> guidText;
+        if (action == "list" && guidText.empty())
+        {
+            if (PlayerbotManagedRoster::List().empty())
+                handler->SendSysMessage("No managed Playerbot identities are configured.");
+            for (ManagedPlayerbotIdentity const& identity : PlayerbotManagedRoster::List())
+            {
+                ObjectGuid characterGuid = ObjectGuid::Create<HighGuid::Player>(identity.CharacterGuidLow);
+                CharacterCacheEntry const* character = sCharacterCache->GetCharacterCacheByGuid(characterGuid);
+                WorldSession* session = sWorld->FindServerOriginPlayerbot(characterGuid);
+                char const* state = session ? (session->GetPlayer() ? "online" : "loading") : "offline";
+                if (character && character->AccountId == identity.AccountId)
+                    handler->PSendSysMessage("Playerbot %s (GUID %u, account %u, level %u, class %u): %s.",
+                        character->Name.c_str(), identity.CharacterGuidLow, identity.AccountId,
+                        uint32(character->Level), uint32(character->Class), state);
+                else
+                    handler->PSendSysMessage("Playerbot GUID %u (account %u): invalid or missing character cache entry.",
+                        identity.CharacterGuidLow, identity.AccountId);
+            }
+            return true;
+        }
+
+        input >> extra;
+        uint32 guidLow = 0;
+        auto [end, error] = std::from_chars(guidText.data(), guidText.data() + guidText.size(), guidLow);
+        if ((action != "start" && action != "stop") || guidText.empty() || !extra.empty() ||
+            error != std::errc{} || end != guidText.data() + guidText.size() || !guidLow)
+        {
+            handler->SendSysMessage("Usage: server playerbotdev managed <list|start GUID|stop GUID>");
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        ObjectGuid characterGuid = ObjectGuid::Create<HighGuid::Player>(guidLow);
+        ManagedPlayerbotIdentity const* identity = PlayerbotManagedRoster::Find(guidLow);
+        if (!identity)
+        {
+            handler->SendSysMessage("That character is not in the managed Playerbot roster.");
+            handler->SetSentErrorMessage(true);
+            return false;
+        }
+
+        if (action == "start")
+        {
+            if (!sWorld->getBoolConfig(CONFIG_PLAYERBOTS_MANAGED_ENABLED))
+            {
+                handler->SendSysMessage("Managed Playerbot admission is disabled or its roster is invalid.");
+                handler->SetSentErrorMessage(true);
+                return false;
+            }
+            if (!sWorld->TryStartServerOriginPlayerbot(identity->AccountId, characterGuid))
+            {
+                handler->SendSysMessage("Managed Playerbot admission rejected; check account ownership, class, online state and session limits.");
+                handler->SetSentErrorMessage(true);
+                return false;
+            }
+            handler->PSendSysMessage("Managed Playerbot %u admitted; character loading is asynchronous.", guidLow);
+        }
+        else
+            handler->PSendSysMessage("Managed Playerbot %u %s.", guidLow,
+                sWorld->RequestStopServerOriginPlayerbot(characterGuid) ? "exit requested" : "is offline");
         return true;
     }
 

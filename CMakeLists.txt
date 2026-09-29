@@ -6,6 +6,7 @@ tc_register_module(
   SOURCES ${PLAYERBOT_SOURCES}
   INCLUDE_DIRS ${PLAYERBOT_INCLUDES}
   TEST_SOURCES ${PLAYERBOT_TEST_SOURCES}
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/Bot/PlayerbotManagedRoster.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/Bot/Engine/NamedObjectContext.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/Bot/Engine/AiObjectContext.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/Bot/Engine/Engine.cpp"
