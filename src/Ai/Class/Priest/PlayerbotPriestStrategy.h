@@ -51,7 +51,8 @@ bool TryInHealthOrder(std::vector<Candidate>& candidates, Health&& health, Attem
 }
 
 void LogKnownAbilities(Player const& bot);
-bool HealParty(Player& bot, Player& owner);
+std::vector<Player*> HealCandidates(Player& bot, Player* owner);
+bool HealParty(Player& bot, Player* owner);
 bool MaintainBuff(Player& bot, Player& owner);
 }
 

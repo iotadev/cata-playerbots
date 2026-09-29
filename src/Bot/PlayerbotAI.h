@@ -18,12 +18,16 @@ class PlayerbotAI
 public:
     explicit PlayerbotAI(WorldSession& session) : session(session) { }
     Player* GetBot() const;
+    Player* GetController() const;
     Creature* GetCurrentTarget() const;
+    void SetController(ObjectGuid guid) { controllerGuid = guid; }
+    void ClearController() { controllerGuid.Clear(); }
     void SetCurrentTarget(ObjectGuid guid) { targetGuid = guid; }
     void ClearCurrentTarget() { targetGuid.Clear(); }
 
 private:
     WorldSession& session;
+    ObjectGuid controllerGuid;
     ObjectGuid targetGuid;
 };
 

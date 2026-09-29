@@ -6,6 +6,8 @@
 #include "Log.h"
 #include "World.h"
 
+void AddSC_playerbot_chat_commands();
+
 namespace
 {
 class PlayerbotsModuleWorldScript final : public WorldScript
@@ -23,4 +25,5 @@ public:
 void AddSC_playerbots_module()
 {
     new PlayerbotsModuleWorldScript();
+    AddSC_playerbot_chat_commands();
 }

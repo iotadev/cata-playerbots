@@ -5,7 +5,6 @@
 #include "PlayerbotSessionBehavior.h"
 #include "WorldSession.h"
 #include "Creature.h"
-#include "Config.h"
 #include "Group.h"
 #include "Log.h"
 #include "Map.h"
@@ -15,8 +14,12 @@
 #include "PartyPackets.h"
 #include "Player.h"
 #include "PlayerbotGroupStrategy.h"
+#include "PlayerbotSecurity.h"
+#include "MageAiObjectContext.h"
 #include "PlayerbotMageStrategy.h"
+#include "PriestAiObjectContext.h"
 #include "PlayerbotPriestStrategy.h"
+#include "../Script/PlayerbotConfig.h"
 #include "PlayerbotWarriorStrategy.h"
 #include "World.h"
 #include "WorldPacket.h"
@@ -34,8 +37,7 @@ bool PlayerbotModuleSupportsClass(uint8 playerClass)
 }
 void PlayerbotSessionBehavior::UpdateMap(uint32 diff)
 {
-    // Construct class objects only after login yields the actual Player. The
-    // engine is intentionally not ticked until it can replace the old path.
+    // Construct class objects only after login yields the actual Player.
     if (!_engine)
         if (Player* bot = _ai.GetBot())
             if (bot->getClass() == CLASS_WARRIOR)
@@ -43,10 +45,31 @@ void PlayerbotSessionBehavior::UpdateMap(uint32 diff)
                 _aiContext = std::make_unique<WarriorAiObjectContext>(&_ai);
                 _engine = std::make_unique<Engine>(&_ai, *_aiContext);
                 _engine->AddStrategy("nc");
+                _engine->AddStrategy(bot->GetPrimaryTalentTree(bot->GetActiveSpec()) == TALENT_TREE_WARRIOR_PROTECTION ? "tank" : "warrior");
+            }
+            else if (bot->getClass() == CLASS_MAGE)
+            {
+                _aiContext = std::make_unique<MageAiObjectContext>(&_ai);
+                _engine = std::make_unique<Engine>(&_ai, *_aiContext);
+                _engine->AddStrategy(bot->GetPrimaryTalentTree(bot->GetActiveSpec()) == TALENT_TREE_MAGE_FROST ? "frost" : "mage");
+            }
+            else if (bot->getClass() == CLASS_PRIEST)
+            {
+                _aiContext = std::make_unique<PriestAiObjectContext>(&_ai);
+                _engine = std::make_unique<Engine>(&_ai, *_aiContext);
+                _engine->AddStrategy("heal");
+                _engine->AddStrategy("nc");
             }
 
-    UpdateServerOriginMovement(diff);
     UpdateServerOriginParty();
+    if (_serverOriginResurrectionCheckTimer > diff)
+        _serverOriginResurrectionCheckTimer -= diff;
+    else
+    {
+        _serverOriginResurrectionCheckTimer = 2000;
+        UpdateServerOriginResurrection();
+    }
+    UpdateServerOriginMovement(diff);
     UpdateServerOriginInstanceJoin();
     UpdateServerOriginCombat(diff);
 }
@@ -64,7 +87,15 @@ void PlayerbotSessionBehavior::UpdateWorld()
             {
                 TC_LOG_INFO("server", "PB-PARTY: %s entered dungeon map %u instance %u", _player->GetName().c_str(),
                     _player->GetMapId(), _player->GetInstanceId());
-                RequestServerOriginFollow(_serverOriginPartyLeaderGuidLow);
+                uint32 controllerGuidLow = _serverOriginPartyLeaderGuidLow;
+                Group* group = _player->GetGroup();
+                if (controllerGuidLow && group && group->IsMember(ObjectGuid::Create<HighGuid::Player>(controllerGuidLow)))
+                {
+                    RequestServerOriginFollow(controllerGuidLow);
+                    _serverOriginPartyControllerGuidLow.store(controllerGuidLow);
+                }
+                else
+                    RequestServerOriginHold();
             }
             else
                 TC_LOG_INFO("server", "PB-PARTY: %s dungeon transfer failed; arrived on map %u", _player->GetName().c_str(), _player->GetMapId());
@@ -77,12 +108,32 @@ void PlayerbotSessionBehavior::RequestServerOriginFollow(uint32 characterGuidLow
 {
     ASSERT(_session.IsServerOrigin() && characterGuidLow);
     RequestServerOriginCease();
+    _serverOriginPartyControllerGuidLow.store(0);
     _serverOriginMovementRequest.store(characterGuidLow);
 }
 
 void PlayerbotSessionBehavior::RequestServerOriginHold()
 {
     ASSERT(_session.IsServerOrigin());
+    RequestServerOriginCease();
+    _serverOriginPartyControllerGuidLow.store(0);
+    _serverOriginMovementRequest.store(uint64(-1));
+}
+
+void PlayerbotSessionBehavior::RequestPartyControllerFollow(uint32 characterGuidLow)
+{
+    ASSERT(_session.IsServerOrigin() && characterGuidLow);
+    if (_serverOriginPartyControllerGuidLow.load() != characterGuidLow)
+        return;
+    RequestServerOriginCease();
+    _serverOriginMovementRequest.store(characterGuidLow);
+}
+
+void PlayerbotSessionBehavior::RequestPartyControllerHold()
+{
+    ASSERT(_session.IsServerOrigin());
+    if (!_serverOriginPartyControllerGuidLow.load())
+        return;
     RequestServerOriginCease();
     _serverOriginMovementRequest.store(uint64(-1));
 }
@@ -117,6 +168,7 @@ void PlayerbotSessionBehavior::UpdateServerOriginMovement(uint32 diff)
         _serverOriginFollowTargetGuidLow.store(0);
         if (!retainOwner)
         {
+            _ai.ClearController();
             _serverOriginLastFollowOwnerGuidLow = 0;
             _serverOriginRecoveryOwnerGuidLow = 0;
         }
@@ -149,6 +201,7 @@ void PlayerbotSessionBehavior::UpdateServerOriginMovement(uint32 diff)
             _serverOriginPathCatchUpActive = false;
             _serverOriginHealCheckTimer = 0;
             _serverOriginFollowTargetGuidLow.store(uint32(request));
+            _ai.SetController(ownerGuid);
             _serverOriginLastFollowOwnerGuidLow = uint32(request);
             _serverOriginRecoveryOwnerGuidLow = 0;
             _serverOriginAutoAssistEnabled.store(true);
@@ -233,8 +286,11 @@ void PlayerbotSessionBehavior::UpdateServerOriginMovement(uint32 diff)
         if (owner && PlayerbotGroup::CanResumeAfterDeath(*_player, *owner))
         {
             uint32 ownerGuidLow = _serverOriginRecoveryOwnerGuidLow;
+            bool partyControlled = _serverOriginPartyControllerGuidLow.load() == ownerGuidLow;
             _serverOriginRecoveryOwnerGuidLow = 0;
             RequestServerOriginFollow(ownerGuidLow);
+            if (partyControlled)
+                _serverOriginPartyControllerGuidLow.store(ownerGuidLow);
             TC_LOG_INFO("server", "PB-RECOVERY: %s and owner %s are alive nearby; resuming follow", _player->GetName().c_str(), owner->GetName().c_str());
         }
     }
@@ -243,7 +299,21 @@ void PlayerbotSessionBehavior::UpdateServerOriginMovement(uint32 diff)
 void PlayerbotSessionBehavior::UpdateServerOriginParty()
 {
     Player* _player = _session.GetPlayer();
-    if (!_session.IsServerOrigin() || !_player || !_player->IsInWorld() || _player->GetGroup())
+    if (!_session.IsServerOrigin() || !_player || !_player->IsInWorld())
+        return;
+
+    if (uint32 controllerGuidLow = _serverOriginPartyControllerGuidLow.load())
+    {
+        Group* group = _player->GetGroup();
+        if (!group || !group->IsMember(ObjectGuid::Create<HighGuid::Player>(controllerGuidLow)))
+        {
+            RequestServerOriginHold();
+            _serverOriginPartyLeaderGuidLow = 0;
+            TC_LOG_INFO("server", "PB-PARTY: %s lost invitation-adopted controller GUID %u; holding", _player->GetName().c_str(), controllerGuidLow);
+        }
+    }
+
+    if (_player->GetGroup())
         return;
 
     Group* invitation = _player->GetGroupInvite();
@@ -252,11 +322,12 @@ void PlayerbotSessionBehavior::UpdateServerOriginParty()
 
     // Adapt mod-playerbots' AcceptInvitationAction: resolve the inviting
     // leader, use the core accept flow, then adopt that human as controller.
-    // This default-off dev roster allows any human admitted by the core's
-    // normal party checks; it does not implement PlayerbotSecurity yet.
+    // This default-off dev roster keeps the donor invite/control distinction:
+    // an ungrouped bot may accept an eligible human invite, while full control
+    // belongs to the adopted party controller. The core also checks the invite.
     Player* owner = ObjectAccessor::FindPlayer(invitation->GetLeaderGUID());
     WorldPackets::Party::PartyInviteResponse response(WorldPacket(CMSG_PARTY_INVITE_RESPONSE, 0));
-    if (!owner || owner == _player || !owner->GetSession() || owner->GetSession()->IsServerOrigin())
+    if (!owner || !PlayerbotSecurity(*_player).CheckLevelFor(PLAYERBOT_SECURITY_INVITE, *owner))
     {
         response.Accept = false;
         _session.HandlePartyInviteResponseOpcode(response);
@@ -277,8 +348,38 @@ void PlayerbotSessionBehavior::UpdateServerOriginParty()
         {
             RequestServerOriginHold();
         }
+        _serverOriginPartyControllerGuidLow.store(ownerGuidLow);
         TC_LOG_INFO("server", "PB-PARTY: %s joined followed leader GUID %u's party; controller adopted from invitation", _player->GetName().c_str(), ownerGuidLow);
         PlayerbotGroup::GreetOnJoin(*_player, *owner);
+    }
+}
+
+void PlayerbotSessionBehavior::UpdateServerOriginResurrection()
+{
+    Player* bot = _ai.GetBot();
+    if (!bot || bot->IsAlive() || !bot->IsResurrectRequested() ||
+        !PlayerbotModuleEnginePriestHealEnabled())
+        return;
+
+    Group* group = bot->GetGroup();
+    if (!group)
+        return;
+
+    // Adapt donor AcceptResurrectAction: answer only a request from a current
+    // party member and let Cata's normal handler apply raid and request rules.
+    for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+    {
+        Player* member = ref->GetSource();
+        if (!member || !member->IsAlive() || member->GetMap() != bot->GetMap() ||
+            !bot->IsResurrectRequestedBy(member->GetGUID()))
+            continue;
+
+        WorldPacket response(CMSG_RESURRECT_RESPONSE, 9);
+        response << member->GetGUID() << uint8(1);
+        _session.HandleResurrectResponseOpcode(response);
+        if (bot->IsAlive())
+            TC_LOG_INFO("server", "PB-RECOVERY: %s accepted resurrection from %s", bot->GetName().c_str(), member->GetName().c_str());
+        return;
     }
 }
 
@@ -322,16 +423,25 @@ void PlayerbotSessionBehavior::UpdateServerOriginCombat(uint32 diff)
     if (!_session.IsServerOrigin() || !_player || !_player->IsInWorld())
         return;
 
-    if (_player->getClass() == CLASS_PRIEST && _serverOriginFollowTargetGuidLow.load())
+    if (_player->getClass() == CLASS_PRIEST &&
+        (_serverOriginFollowTargetGuidLow.load() || _serverOriginRecoveryOwnerGuidLow))
     {
         if (_serverOriginHealCheckTimer > diff)
             _serverOriginHealCheckTimer -= diff;
         else
         {
             _serverOriginHealCheckTimer = 750;
-            uint32 ownerGuidLow = _serverOriginFollowTargetGuidLow.load();
-            if (Player* owner = _player->GetMap()->GetPlayer(ObjectGuid::Create<HighGuid::Player>(ownerGuidLow)))
-                PlayerbotPriest::HealParty(*_player, *owner);
+            if (_engine && PlayerbotModuleEnginePriestHealEnabled())
+            {
+                if (!_priestEngineHealAnnounced)
+                {
+                    TC_LOG_INFO("server", "PB-ENGINE: %s Priest healing routed through engine", _player->GetName().c_str());
+                    _priestEngineHealAnnounced = true;
+                }
+                _engine->Tick(false, false, _player->IsInCombat());
+            }
+            else
+                PlayerbotPriest::HealParty(*_player, _ai.GetController());
         }
     }
 
@@ -435,8 +545,15 @@ void PlayerbotSessionBehavior::UpdateServerOriginCombat(uint32 diff)
         {
             _serverOriginBuffCheckTimer = 2000;
             if (_player->getClass() == CLASS_WARRIOR && _engine &&
-                sConfigMgr->GetBoolDefault("Playerbots.Dev.EngineWarriorBuff", false))
+                PlayerbotModuleEngineWarriorBuffEnabled())
+            {
+                if (!_warriorEngineBuffAnnounced)
+                {
+                    TC_LOG_INFO("server", "PB-ENGINE: %s Warrior buff routed through engine", _player->GetName().c_str());
+                    _warriorEngineBuffAnnounced = true;
+                }
                 _engine->Tick();
+            }
             else
                 PlayerbotWarrior::MaintainBuff(*_player);
             if (Player* owner = _player->GetMap()->GetPlayer(ObjectGuid::Create<HighGuid::Player>(_serverOriginFollowTargetGuidLow.load())))
@@ -478,7 +595,24 @@ void PlayerbotSessionBehavior::UpdateServerOriginCombat(uint32 diff)
         {
             if (!_player->IsNonMeleeSpellCast(false))
                 _player->SetFacingToObject(target);
-            PlayerbotMage::Execute(*_player, *target);
+            if (_engine && PlayerbotModuleEngineMageCombatEnabled())
+            {
+                bool frost = _player->GetPrimaryTalentTree(_player->GetActiveSpec()) == TALENT_TREE_MAGE_FROST;
+                char const* strategy = frost ? "frost" : "mage";
+                if (!_engine->HasStrategy(strategy))
+                {
+                    _engine->RemoveStrategy(frost ? "mage" : "frost");
+                    _engine->AddStrategy(strategy);
+                }
+                if (!_mageEngineCombatAnnounced)
+                {
+                    TC_LOG_INFO("server", "PB-ENGINE: %s Mage combat routed through %s strategy", _player->GetName().c_str(), strategy);
+                    _mageEngineCombatAnnounced = true;
+                }
+                _engine->Tick(false, false, true);
+            }
+            else
+                PlayerbotMage::Execute(*_player, *target);
             return;
         }
 
@@ -490,6 +624,23 @@ void PlayerbotSessionBehavior::UpdateServerOriginCombat(uint32 diff)
             _serverOriginMeleeStance = stance;
         }
 
-        PlayerbotWarrior::Execute(*_player, *target);
+        if (_engine && PlayerbotModuleEngineWarriorCombatEnabled())
+        {
+            bool protection = _player->GetPrimaryTalentTree(_player->GetActiveSpec()) == TALENT_TREE_WARRIOR_PROTECTION;
+            char const* strategy = protection ? "tank" : "warrior";
+            if (!_engine->HasStrategy(strategy))
+            {
+                _engine->RemoveStrategy(protection ? "warrior" : "tank");
+                _engine->AddStrategy(strategy);
+            }
+            if (!_warriorEngineCombatAnnounced)
+            {
+                TC_LOG_INFO("server", "PB-ENGINE: %s Warrior combat routed through %s strategy", _player->GetName().c_str(), strategy);
+                _warriorEngineCombatAnnounced = true;
+            }
+            _engine->Tick(false, false, true);
+        }
+        else
+            PlayerbotWarrior::Execute(*_player, *target);
     }
 }

@@ -28,13 +28,11 @@ bool PlayerbotPriest::MaintainBuff(Player& bot, Player& owner)
     return PlayerbotDecision::MaintainPartyBuff(bot, owner, fortitude);
 }
 
-bool PlayerbotPriest::HealParty(Player& bot, Player& owner)
+std::vector<Player*> PlayerbotPriest::HealCandidates(Player& bot, Player* owner)
 {
-    if (bot.getClass() != CLASS_PRIEST || !bot.IsAlive() || !owner.IsAlive() ||
-        bot.IsNonMeleeSpellCast(false) || bot.GetMap() != owner.GetMap())
-        return false;
-
     std::vector<Player*> candidates;
+    if (bot.getClass() != CLASS_PRIEST || !bot.IsAlive())
+        return candidates;
     auto consider = [&](Player* member)
     {
         if (!member || !member->IsAlive() || member->GetMap() != bot.GetMap() ||
@@ -47,11 +45,21 @@ bool PlayerbotPriest::HealParty(Player& bot, Player& owner)
     };
 
     consider(&bot);
-    consider(&owner);
+    consider(owner);
     Group* group = bot.GetGroup();
-    if (group && owner.GetGroup() == group)
+    if (group)
         for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
             consider(ref->GetSource());
+
+    return candidates;
+}
+
+bool PlayerbotPriest::HealParty(Player& bot, Player* owner)
+{
+    if (bot.IsNonMeleeSpellCast(false))
+        return false;
+
+    std::vector<Player*> candidates = HealCandidates(bot, owner);
 
     // The priority/health-trigger pattern is adapted from Playerbots' Priest
     // heal strategy. All casts still pass through Cata spell and range checks.

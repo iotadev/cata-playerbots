@@ -21,16 +21,40 @@ The playable slice is a manually configured, low-level companion party:
 - Server-origin login, transfer, logout, and shutdown use the core's normal
   player/session paths.
 
-The most recent mixed-party playtest reached Ragefire Chasm and observed Mage
-damage and sustained Priest healing. It did **not** establish a complete dungeon
-clear, dependable death recovery, tank threat, or full class/spec rotations.
+The 2026-09-29 disposable mixed-party playtest reached Ragefire Chasm. The Mage
+opened on a hostile target and logged 13 accepted offensive casts; the Priest
+logged six healing casts and one Fortitude cast. Warrior combat routing was
+observed, but this run did not establish Warrior threat or an accepted Warrior
+ability. It also did **not** establish a complete dungeon clear, dependable
+death recovery, or full class/spec rotations.
 Bot accounts and characters are still supplied manually; autonomous population,
 questing, and world progression have not been ported.
+
+An experimental normal-whisper path accepts `follow`, `stay`, `attack`, and
+`stop` from the bot's authorized party controller; `list` shows that player's
+currently online controllable bots. The latest client test confirmed `list`
+and the basic movement/control behavior. One `attack` attempt after `stop` was
+rejected because the human's selected target was Botmage, not a hostile unit;
+the command's target-selection UX needs further work. This is not the full
+upstream command set or the MultiBot addon bridge, and it cannot connect an
+offline bot.
+
+Use `/w Botmage list` (substitute an admitted bot's name) to view your active
+controllable roster. For `attack`, select a hostile unit before whispering the
+command and have the bot following you. `stop` ceases combat; it does not log the
+bot out. A reply saying "requested" confirms queuing, not completion. Normal
+control belongs to the invitation-adopted controller while in the party; the
+development GM override remains separate.
 
 The port is moving from the temporary companion logic to upstream Playerbots'
 engine, contexts, actions, triggers, values, and strategies. Imported components
 and Cata-specific changes are tracked in [PORTING.md](PORTING.md). An imported
 component is not necessarily wired into live bot decisions.
+
+The next work is managed roster/login/logout and a first Cata MultiBot bridge,
+followed by character creation and broader donor behavior. The core maintains
+the [roadmap](https://github.com/iotadev/TrinityCore/blob/master/doc/local/playerbots/PLAYERBOTS_PORT_ROADMAP.md)
+and [implementation handoff](https://github.com/iotadev/TrinityCore/blob/master/doc/local/playerbots/PLAYERBOTS_WORK_PACKETS.md).
 
 ## Building a matching development checkout
 

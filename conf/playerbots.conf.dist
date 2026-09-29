@@ -32,6 +32,41 @@ Playerbots.Dev.GreetingOnJoin = 1
 Playerbots.Dev.EngineWarriorBuff = 0
 
 #
+#    Playerbots.Dev.EngineWarriorCombat
+#        Description: Experimental Warrior combat route through the imported
+#                     Playerbots engine. Protection talents use a bounded tank
+#                     strategy with party-target Taunt; other or unset trees
+#                     use a generic low-level melee fallback. Replaces only
+#                     the existing Warrior spell priority. Restart to compare.
+#        Default:     0 - (Existing companion Warrior behavior)
+
+Playerbots.Dev.EngineWarriorCombat = 0
+
+#
+#    Playerbots.Dev.EngineMageCombat
+#        Description: Experimental Mage combat route through the imported
+#                     Playerbots engine. Frost talents use the bounded Frost
+#                     strategy; other or unset trees use the generic fallback.
+#                     This replaces only the existing Mage spell priority.
+#                     Restart to compare paths reliably.
+#        Default:     0 - (Existing companion Mage behavior)
+
+Playerbots.Dev.EngineMageCombat = 0
+
+#
+#    Playerbots.Dev.EnginePriestHeal
+#        Description: Experimental Priest party-healing route through the
+#                     imported Playerbots engine. Uses the Cata-validated
+#                     Shield, Flash Heal, Heal and Renew spell set. Also enables
+#                     out-of-combat Priest Resurrection for nearby dead party
+#                     members and party-bot acceptance of resurrection offers.
+#                     Does not enable a complete talent rotation.
+#                     Restart to compare paths reliably.
+#        Default:     0 - (Existing companion Priest healing)
+
+Playerbots.Dev.EnginePriestHeal = 0
+
+#
 #    Playerbots.Dev.AccountId
 #        Description: Dedicated ordinary-player account used only by PB-00.
 #        Default:     0 - (Not configured)

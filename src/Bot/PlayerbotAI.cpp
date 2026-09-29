@@ -4,6 +4,7 @@
  */
 #include "PlayerbotAI.h"
 #include "Creature.h"
+#include "Map.h"
 #include "ObjectAccessor.h"
 #include "Player.h"
 #include "WorldSession.h"
@@ -22,4 +23,10 @@ Creature* PlayerbotAI::GetCurrentTarget() const
 {
     Player* bot = GetBot();
     return bot && !targetGuid.IsEmpty() ? ObjectAccessor::GetCreature(*bot, targetGuid) : nullptr;
+}
+
+Player* PlayerbotAI::GetController() const
+{
+    Player* bot = GetBot();
+    return bot && !controllerGuid.IsEmpty() ? bot->GetMap()->GetPlayer(controllerGuid) : nullptr;
 }

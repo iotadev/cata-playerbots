@@ -3,8 +3,29 @@
  * Released under GNU GPL v2 or any later version.
  */
 #include "PlayerbotSessionHooks.h"
+#include "PlayerbotConfig.h"
 #include "Config.h"
 #include "World.h"
+bool PlayerbotModuleEngineWarriorBuffEnabled()
+{
+    return sConfigMgr->GetBoolDefault("Playerbots.Dev.EngineWarriorBuff", false);
+}
+
+bool PlayerbotModuleEngineWarriorCombatEnabled()
+{
+    return sConfigMgr->GetBoolDefault("Playerbots.Dev.EngineWarriorCombat", false);
+}
+
+bool PlayerbotModuleEngineMageCombatEnabled()
+{
+    return sConfigMgr->GetBoolDefault("Playerbots.Dev.EngineMageCombat", false);
+}
+
+bool PlayerbotModuleEnginePriestHealEnabled()
+{
+    return sConfigMgr->GetBoolDefault("Playerbots.Dev.EnginePriestHeal", false);
+}
+
 void LoadPlayerbotModuleSettings(World& world, bool moduleConfigsValid)
 {
     world.setBoolConfig(CONFIG_PLAYERBOTS_DEV_ENABLED, moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.Dev.Enabled", false));

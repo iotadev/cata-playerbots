@@ -47,7 +47,7 @@ bool CanResumeAfterDeath(Player const& bot, Player const& owner)
 
     Group const* group = bot.GetGroup();
     WorldSession const* ownerSession = owner.GetSession();
-    return group && owner.GetGroup() == group && group->GetLeaderGUID() == owner.GetGUID() &&
+    return group && owner.GetGroup() == group && group->IsMember(owner.GetGUID()) &&
         ownerSession && !ownerSession->IsServerOrigin();
 }
 
