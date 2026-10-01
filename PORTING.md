@@ -1,5 +1,575 @@
 # Port provenance and remaining work
 
+## Reading this history
+
+Entries below record evidence at their dated revisions, newest first. Older
+"pending" or inactive-engine statements are not the current project status;
+later entries supersede them only for the behavior actually verified. Use the
+module README and the matching core's roadmap and infrastructure acceptance
+checklist for current scope. Windows build/tests and the server-only factory
+batch have passed. Ordinary-player addon lifecycle also passed the bundled
+check below. Linux build and automated tests passed as recorded here; Linux
+runtime remains unverified. No full donor feature parity is claimed.
+
+## Linux build acceptance - 2026-10-01
+
+Ubuntu 22.04, GCC 11.4, CMake 3.22 and Ninja built worldserver, authserver and
+tests-common with Playerbots and AHBot enabled, Release configuration and both
+core/script precompiled headers disabled. CTest passed all 109 tests. This run
+required explicit array and map-store headers previously hidden by incidental
+includes. Revision stamping was disabled for the mounted Windows worktree;
+that build arrangement is not a change to runtime or source revision policy.
+This verifies Linux compilation and headless tests, not a Linux realm/database
+playtest, every toolchain, or full donor gameplay parity.
+
+## Explicit map-store dependency - 2026-10-01
+
+The GCC 11 build with core precompiled headers disabled exposed an undeclared
+sMapStore and incomplete MapEntry in PlayerbotSessionBehavior's instance-entry
+path. That source now includes DBCStores.h directly, which declares the store
+and includes the native map-entry definition. No routing or gameplay behavior
+changes. The subsequent incremental Linux build and all 109 tests passed.
+
+## Ordinary-player managed lifecycle check - 2026-10-01
+
+An ordinary client account created and logged into a Blood Elf Warrior. Native
+character storage and the auth realm index confirmed the character and count.
+With an explicit directional account link, the player discovered the configured
+bot under MultiBot's My Bots roster and used its buttons to connect, disconnect
+and reconnect. The harness observed native character online transitions and
+cleared bot-account online state after disconnect; server logs recorded repeated
+login/logout completion. The bot also accepted a party invitation and followed.
+Human logout, explicit final bot cleanup and world/database shutdown completed
+cleanly. No GM override was used.
+
+An earlier fixture lost its processes without clean-shutdown evidence; its cause
+remains unknown. Database recovery preserved the client-created character and
+confirmed accounting before the corrected check reused it. The successful rerun
+does not diagnose that stop. Harness password/name setup errors were corrected.
+This check does not prove autonomous admission, factory player endpoints, every
+permission-denial case, full donor UI compatibility or Linux build/runtime.
+
+## Mage/Priest party buffs through the engine - 2026-09-30
+
+Upstream master was rechecked and remains
+7bae1b5c58c76a0aa20381155edc08096d1485b2. This adaptation follows
+MageBuffStrategy in src/Ai/Class/Mage/Strategy/GenericMageNonCombatStrategy.cpp
+and PriestBuffStrategy in src/Ai/Class/Priest/Strategy/PriestNonCombatStrategy.cpp,
+plus their class buff triggers/actions. Registered `buff` strategies now select
+`arcane intellect on party` and `power word: fortitude on party` actions through
+the existing class engine. Wrath spell naming is retained for registry congruence;
+Cata Brilliance/Fortitude spell and single/party aura IDs remain authoritative.
+Priest buff relevance is reduced from donor 11 to 10 so existing light healing
+and resurrection win. Divine Spirit, armor, consumables and wider buffs are absent.
+
+The new default-off EnginePartyBuff gate selects this route instead of direct
+Mage/Priest upkeep. Priest healing uses the same engine without a second buff
+tick when its route is enabled. A per-trigger CalculatedValue caches only a
+boolean for two seconds; actions recheck current targets, configuration and
+native eligibility before casting. No Player pointer is retained across ticks,
+no map-thread SQL or independent update loop is added. The existing direct
+fallback uses the same aura definitions and candidate visitor, preserving its
+target order and eligibility when the feature is off. Worldserver/tests-common
+built with both modules enabled and all 109 automated tests passed. The three
+new cases check strategy naming/handler priority and Cata aura definitions,
+not native casts. The first link missed newly added files in the stale generated
+source list; refreshing the existing CMake tree resolved it. Runtime confirmation
+belongs to the next mixed-party check; this batch did not start a realm.
+
+## Completed disposable factory batch - 2026-09-30
+
+The corrected worldserver/authserver build passed all 106 automated tests.
+The bundled CheckFactory runtime run then passed on a fresh disposable clone:
+disabled mutations and absent schema rejected without aborting; missing dedication,
+nonempty, privileged and online accounts rejected; enrollment confirmed the stored
+record; native Mage creation returned a ready GUID after accounting completion.
+An exact rerun repaired an intentionally stale realm count without creating or
+changing the character. Conflicting intent rejected. Explicit managed admission
+then completed login, save/logout and account-online cleanup, followed by clean
+world/database shutdown. Only the clone received schema, account and config writes.
+
+This supersedes the pending factory runtime statements in the earlier entries
+below. The first failed run was a duplicate-key harness error; the second exposed
+the fatal missing-table query corrected by metadata preflight. Ordinary client
+creation, addon-managed lifecycle, broader gameplay, Debug runtime and Linux
+build/runtime remain unverified by this server-only batch. No automatic account
+creation, population, admission or player-control grants have been added.
+
+## Optional-schema preflight correction - 2026-09-30
+
+The missing-schema runtime case exposed a real server abort: MySQL error 1146
+reaches TrinityCore's MySQLConnection::_HandleMySQLErrno fatal schema handler.
+A missing optional table does not simply produce an empty query result. Factory
+inspection and enrollment now check information_schema for the required column
+names/types before referencing the module table. Missing/incompatible metadata
+rejects the request without issuing that optional-table query. The check is not
+cached, allowing an operator to apply the schema before a later command.
+
+The core's fatal SQL error policy is unchanged. This preflight does not promise
+to survive arbitrary concurrent schema changes or all database failures; apply
+the documented schema before enabling mutations and do not alter it during
+active requests. The previous runtime run proved creation/reuse/accounting but
+stopped at a harness config error; the next run aborted at the missing-schema
+case. Neither failed run established full managed admission success. The completed
+preflight rebuild and fresh runtime rerun are recorded above.
+
+## Factory runtime batch and typed SQL reads - 2026-09-30
+
+The core's existing disposable lifecycle helper now has a bundled CheckFactory
+scenario; no new service launcher is required by the module. It accepts an
+explicit validated source checkout for a stopped seed, clones it, then uses the
+current binaries and optional ownership schema only in that private clone.
+Initial creation/reuse/accounting checks succeeded. The first run stopped at
+managed admission because the harness generated duplicate Managed.Enabled INI
+keys, causing native config reload to fail; it did not establish full admission
+success. The harness now replaces the key and polls asynchronous factory status.
+
+Field getters were also aligned with SQL metadata: account-online uses its native
+byte getter, and aggregate/epoch/security/GUID numeric expressions are explicitly
+CAST AS UNSIGNED with 64-bit getters. TrinityCore's TRINITY_DEBUG type checks
+otherwise return zero for a mismatched getter; eligibility reads must not silently
+permit an online/privileged account or ignore a decimal SUM. This is source-audited
+Debug compatibility, not a completed Debug build/run. Corrected worldserver,
+authserver and tests-common built and all 106 headless tests passed. A fresh
+runtime rerun is pending; ordinary client creation/gameplay remain untested here.
+
+## Explicit enrollment, native submission and reuse recovery - 2026-09-30
+
+The next operator slice is now implemented in source under the same donor-shaped
+RandomPlayerbotFactory owner. `Factory.Enabled` defaults off and requires valid
+module configuration. Console-only `managed enroll`, `managed provision` and
+`managed factory-status` use no addon/player endpoint. No credentials or native
+account creation are introduced; accounts are pre-created through native admin.
+
+Enrollment requires an empty ordinary account, no existing ownership record,
+valid normalized intent, account expansion eligibility and successful native
+account/character/name reads. It submits a plain auth INSERT...SELECT, rechecking
+auth eligibility without replacing conflicting rows. World-thread callback
+processing confirms the transaction and actual identity/intent row; a zero-row
+successful transaction is not success. One evidence row per account is supported
+in the initial optional schema. No schema migration or live writes were run.
+
+Provisioning consumes current verified evidence/identity, then calls native typed
+creation for an empty account. Exact reruns use World::BeginCharacterReconciliation:
+native cache ownership and one matching database GUID are required, then a
+dedicated world-owned context holds the account reservation through authoritative
+realm-count reconciliation. It does not repeat character creation or save.
+The core creates the receipt; the module only retains its const view. Status
+reports native rejection, pending accounting, failed accounting with recovery
+GUID, abandonment or confirmed readiness. Accepted requests are not completion.
+
+Up to 16 account histories exist in process, with no overlapping pending attempt
+on an account. Factory disable blocks new mutations but pending enrollment
+callbacks continue. No auto-admission, roster/config mutation, player-control
+grant, population, deletion or password change occurs. Enrollment is explicit
+operator dedication, not a distributed ownership proof. It does not reserve
+native sessions or certify cross-database atomicity; submission rechecks current
+eligibility and obtains its own native reservation. Restart/rerun consults
+persistent evidence and actual native identity rather than in-memory history.
+See sql/README.md for commands and limitations. This slice built worldserver,
+authserver and tests-common with both modules enabled and passed all 106 automated
+tests, including the new bounded/overlap request-policy case. The preceding
+reader slice passed 105 tests. Operator schema/queries/callback timing remain
+runtime-unverified; pure policy tests do not certify native persistence.
+
+## Persistent ownership reader and operator inspection - 2026-09-30
+
+The module now provides an optional additive auth ownership schema and a native
+read-only reader under the existing RandomPlayerbotFactory owner. This is Cata
+adaptation around the donor's account selection, not a copied bulk creator.
+Records bind an explicit operator dedication to native account ID/name/join epoch,
+realm, evidence version and exact character intent. They contain no credentials.
+No rows are inferred from name prefixes or config links. The schema is manual,
+not registered in the core updater, so disabled/module-off builds need no table.
+
+`Playerbots.Factory.InspectionEnabled` defaults off and also requires valid module
+configuration. Console-only `server playerbotdev managed inspect <account ID>`
+reads the record, validates account/profile eligibility and compares native
+characters/name availability. Aggregate queries return a row even for zero
+characters; missing results reject rather than silently meaning empty. SQL uses
+numeric IDs and native escaping for the normalized name. Query failures never
+permit creation or reuse. These are synchronous operator reads, not AI ticks.
+
+The diagnostic never writes, enrolls, provisions, updates the roster or admits
+bots. Create/reuse results remain drafts. Other-realm counts are auth-index
+evidence, not verified remote character databases; administrator dedication and
+native validation remain necessary. Native character limits/class unlocks and
+submission-time race checks belong to the creation path. Enrollment and rerun
+accounting recovery remain the next work. See sql/README.md for the schema and
+validation boundary. No migration or account/character mutations were executed.
+Two added headless cases cover evidence identity/version binding and missing
+fields. This reader slice built worldserver/authserver/tests-common and passed
+all 105 automated tests. Schema/query runtime validation remains unperformed.
+
+## Provisioning accounting and ownership decisions - 2026-09-30
+
+Creation-only contexts now keep their account reservation through a separate
+Reconciling receipt phase. The original native realm-count transaction is awaited
+before a corrective write, preventing the two writes from overtaking each other.
+After native character success or rejection, the context reads authoritative
+COUNT(guid) without GROUP BY (so zero characters still yields a result row), then
+awaits a LOGIN_REP_REALM_CHARACTERS transaction. Missing queries, out-of-range
+counts and failed corrective commits yield AccountingFailed, not ready success.
+An original failed optimistic write can be repaired after the character result
+is known. Ordinary client creation retains its existing transaction behavior.
+
+The provisioning API returns a const receipt view. Ready GUID access stays zero
+until character creation and accounting both succeed; a separate committed GUID
+accessor retains evidence for recovery after accounting failure or abandonment.
+This is not a cross-database atomic transaction or a distributed account lease.
+Crash/restart reconciliation and a reuse-specific operator path remain unwired.
+
+`src/Bot/Factory/PlayerbotFactoryOwnership.h` defines module-side creation/reuse
+decisions: verified dedicated ownership and an eligible profile are required;
+only an empty account may create, and only one exact existing account/name/race/
+class/gender identity may reuse. Prefixes, conflicts and extra characters do not
+grant ownership. Inputs must be verified native/persistent facts, not addon data.
+The evidence reader/storage and operator flow are not implemented by these pure
+policy helpers. No live provisioning or new account/character writes occurred.
+
+Worldserver, authserver and tests-common built successfully with both modules
+enabled; all 103 automated tests passed. Six added cases cover accounting
+readiness/failure/abandonment and exact-identity ownership/reuse decisions.
+These are headless policy/receipt checks, not native database timing evidence.
+
+## World-owned native provisioning contexts - 2026-09-30
+
+World::BeginCharacterProvisioning now owns an explicit CharacterCreation
+WorldSession context, separate from clients and admitted server-origin bots.
+It has no socket, character admission GUID or bot hooks, never enters m_sessions,
+and skips account-online writes on destruction. It cannot be initialized or
+admitted through normal session APIs. Native creation queries/transactions are
+pumped on the world thread; the context remains owned until its receipt is
+terminal. At most 16 contexts exist, with one account reservation each.
+
+Existing sessions, duplicate reservations, shutdown, online account profiles,
+privileged accounts in any realm and banned accounts reject new provisioning.
+Human and bot admission cannot replace a pending context. The callback loop
+snapshots account keys rather than holding unordered-map iterators through
+scripts that could submit another request. World destruction abandons unfinished
+receipts; it does not prove a submitted transaction was cancelled. KickAll does
+not destroy an executing creation owner or prematurely release its reservation.
+
+This is a trusted native service, not a player/addon/console endpoint. Its
+caller must establish dedicated-account ownership and feature policy. No module
+caller, account creation, configuration switch, identity adoption or live database
+write was introduced in this batch. Factory ownership/reuse and realm-count
+reconciliation remain prerequisites to exposing the default-off operator flow.
+The account profile uses a prepared read of existing auth tables; no migration
+or copied character-row writes are involved. Reservation/profile policy tests
+do not validate native callback timing or persistence.
+Worldserver, authserver and tests-common built successfully with both modules
+enabled; all 97 automated tests passed, including the two new policy cases.
+No runtime provisioning or database migration was performed.
+
+## Typed native character creation and completion seam - 2026-09-30
+
+Cata's HandleCharCreateOpcode now decodes the packet and calls
+WorldSession::BeginCharacterCreation with a copied CharacterCreateInfo. The
+existing validation/query/save body is retained in CreateCharacter; creation
+rules, native Player cleanup, scripts, realm-count submission and character
+cache ordering are not replaced by module SQL. CharacterCreateInfo has a typed
+constructor matching the donor factory's input shape.
+
+NativeCharacterCreationReceipt distinguishes pending, native rejection,
+successful character commit/cache publication with GUID, and abandoned owner.
+It is world-thread-only and contains no session/Player pointers. One request
+cannot overwrite another pending request, and terminal outcomes do not change.
+An abandoned transaction may still commit; this is not a rollback receipt or
+an atomic character/login database result. The existing realm-count transaction
+still has its separate native submission/completion semantics.
+
+Active/loading players and existing server-origin bot sessions cannot begin
+creation through this entry point. The factory does not call it yet: temporary
+provisioning ownership, callback pumping, account policy, reuse/reconciliation
+and the default-off operator endpoint remain the next slice. Do not construct
+a fake client session or fabricate a create packet to bypass that work.
+The ordinary client creation path now shares this seam and needs inclusion in
+the next integrated disposable creation/lifecycle check. Receipt-only unit
+checks do not prove a successful database transaction or normal client creation.
+Combined worldserver/tests-common build passed with both modules enabled;
+all 95 automated checks passed. A source-body comparison against the current
+core HEAD confirmed that native creation validation/query/save logic differs
+only in success GUID reporting. No live character creation was performed.
+
+## Initial native factory draft - 2026-09-30
+
+The new `src/Bot/Factory/RandomPlayerbotFactory.{h,cpp}` adapts the appearance
+selection in upstream RandomPlayerbotFactory::CreateRandomBot at
+`7bae1b5c58c76a0aa20381155edc08096d1485b2` (upstream master rechecked today).
+It retains the donor factory name/placement and author notices, but deliberately
+stops before Player/session allocation or database writes in this first slice.
+
+Cata uses RaceID/SexID/BaseSection/VariationIndex/ColorIndex instead of the
+donor CharSections field names. The adapter checks native race/class start data,
+world expansion and disabled-creation masks, filters player/DK appearance flags,
+matches face skin and hair/facial colors, and delegates final validity to
+Player::ValidateAppearance with creation mode enabled. The no-facial-hair
+exceptions match that native validator. Selection is deterministic for the
+read-only draft, not a random-population implementation.
+
+`PlayerbotAppearance.h` bounds the search and rejects missing/oversized data
+instead of randomly indexing empty donor arrays. Five regression cases cover
+missing data, field/color mapping, rejected alternatives, native-call bounds
+and mismatched-color failure. The console-only `managed appearance` command
+reports the draft without implying account/name/limit/DK-unlock eligibility.
+No new runtime admission gate, creation endpoint or identity adoption is added.
+The full provisioning path and Cata DBC runtime check remain pending.
+Combined worldserver/tests-common build with both modules enabled passed;
+all 93 automated checks passed, including the five factory regressions.
+
+## Windows MultiBot startup and basic controls - 2026-09-30
+
+The disposable Windows Cata client loaded the full patched donor addon. The
+player confirmed no remaining Lua errors and working Stay, Follow and the
+main Attack button. Initial attack requests reached the server but were
+rejected outside the existing 25-yard owner/bot target gate; moving closer
+confirmed engagement. That gate is temporary companion behavior, not the
+intended final movement/range contract. This check does not establish managed
+roster UI, lifecycle completion, ordinary-player permissions or other addon
+feature families.
+
+Two startup fixes were added to the reproducible compatibility patch:
+LibDataBroker must load before LibDBIcon, and the spellbook uses Cata's
+GetMacroIcons caller-owned table instead of removed GetNumMacroIcons and
+GetMacroIconInfo globals. The latter follows the 4.3.4 Blizzard_MacroUI source
+(RefreshPlayerSpellIconInfo). Candidate and installed modified Lua passed
+Lua 5.1 syntax checks; patch application against the pinned donor passed.
+
+## Managed capability advertisement and Windows client staging - 2026-09-30
+
+HELLO now advertises ALT_ROSTER_V1 and BOT_LIFECYCLE_V1 only when the validated
+player lifecycle service is enabled. Other capabilities remain absent. This
+reports service availability, not requester permission: roster, start/stop and
+poll authorization remain independently checked. Disabled/invalid module
+settings still produce an empty capability set. The exact advertised list has
+an automated regression check; combined worldserver build and all 88 checks
+passed. Authserver was also built for the isolated runtime check.
+
+The compatibility candidate was copied into a previously absent MultiBot
+directory in the Windows Cata test client; no existing addon was overwritten.
+Only addon source/assets/license were copied, not Git metadata or personal
+saved variables. Actual client startup and integrated behavior remain pending.
+Linux compatibility is required for the server/module, not the client addon.
+
+## Portable handoff and donor response checks - 2026-09-30
+
+The source review found no Windows API dependency in mod-playerbots/src or its
+module CMake entry point. The core's modules/CMakeLists.txt already installs
+module configs under CONF_DIR/modules on Unix. This is a source-level finding,
+not a Linux build certification. The module README now distinguishes the
+Windows-verified build from the pending Linux checkpoint and documents plain
+CMake/CTest entry points. Addon preparation uses relative Git/Lua commands;
+neither path depends on optional local PowerShell test helpers.
+
+The Lua 5.1 mock now exercises the patched donor's actual response parser:
+unexpected-sender rejection, encoded ALT_ROSTER entry decoding, batch-count
+integrity, connect pending then ONLINE, and disconnect pending/STOPPING then
+OFFLINE. Callbacks do not report completion for pending replies. Timers are
+captured rather than run. Syntax and expanded mock checks passed. No C++ or
+native runtime behavior changed in this documentation/test slice; the prior
+combined build remains at 87 passing checks. Real client UI/native lifecycle
+authorization and a clean Linux build remain separate validation work.
+
+## Initial Cata client compatibility candidate - 2026-09-30
+
+`addons/MultiBot/cata-compat.patch` applies to the refreshed upstream addon
+`1eac0d9106b8cdf0a79da3974ee1f516f8ca3fbc`. It retains the complete donor
+addon/UI/protocol implementation and upstream licensing, rather than replacing
+it with a custom client. The patch changes Interface to 40300, keeps the older
+party/raid roster events instead of GROUP_ROSTER_UPDATE, and registers MBOT
+before sending. Missing/failed registration makes Comm.Send return false.
+An isolated candidate checkout was prepared; installed client addons and saved
+variables were not changed. The patch passes Git's application check against
+the immutable donor revision.
+
+The donor's main attack button in `UI/MultiBotAttackUI.lua` sends
+`do attack my target`, not bare `attack`. That exact alias now routes to the
+same existing attack request; role-filtered forms remain unsupported rather
+than accidentally commanding every bot. Combined worldserver build and all
+87 automated checks passed with the expanded command assertions.
+
+Lua 5.1.5 syntax checks passed for all 127 candidate addon Lua files and the
+new communication test. The test loads the actual patched donor Comm code
+with mocked WoW globals and checks successful/failed/missing prefix registration,
+self-whisper, party/raid selection, HELLO and PING. This does not prove real
+frame-event compatibility, UI loading or client-server interaction. Prefix
+registration and event choices still need confirmation in the Cata client.
+Class/spec/talent data and unsupported feature UIs are not ported by this patch.
+Keep optional capability advertisement off until that integrated pass.
+
+## MultiBot basic group-control transport - 2026-09-30
+
+Refreshed MultiBot-Chatless upstream default branch to
+`1eac0d9106b8cdf0a79da3974ee1f516f8ca3fbc`. `Core/MultiBotEngine.lua`
+ActionToTarget/ActionToGroup/ActionToTargetOrGroup route basic bot actions by
+normal whisper/party/raid chat. `UI/MultiBotLeftCoreUI.lua` emits stay/follow
+through this path. The bridge's COMBAT endpoint instead handles combat
+strategy toggles and wait-for-attack settings; POSITION handles disperse.
+Neither is repurposed as a generic attack/follow endpoint in this port.
+
+The existing bot-whisper parser is now shared with a group-chat hook for
+follow, stay/hold, attack and stop/cease. Only native party/raid channels,
+in-world human senders and current group membership are eligible. /party in
+a raid reaches only the sender's subgroup; /raid reaches the raid. BG and
+addon-language messages are excluded. Each selected bot must be in the routed
+group and pass existing full-control checks; PlayerbotControl::Dispatch checks
+again before posting a request. Managed account links are not a substitute
+for temporary party control. Normal human chat delivery is preserved.
+
+The group reply summarizes queued requests and rejections, not completed
+movement or combat. Strategy mutation, flee, disperse, loot and other donor
+commands remain unsupported; unrecognized text does not dispatch anything.
+No invented addon opcode, console invocation or new lifecycle path was added.
+The combined worldserver build and all 87 automated checks passed, including
+shared command-vocabulary and party-versus-raid routing checks. Integrated
+runtime authorization and MultiBot client behavior remain unverified.
+
+## MultiBot offline managed roster - 2026-09-30
+
+Upstream bridge HEAD was rechecked at
+`1da05982e478cb00e0b6c87314afe7e0e9653ffb`. The protocol basis is
+SendAltRosterPackets and ConsumeAltRosterRequestRateLimit in
+`src/MultiBotBridge.cpp`, checked against the addon's strict batch reader.
+`GET~ALT_ROSTER` now returns donor-compatible BEGIN/ENTRY/END frames:
+count/truncated boundaries and guid/encoded-name/class/level/ONLINE-or-OFFLINE
+entries. The batch is bounded at 128 entries and each native message at 250
+bytes; omissions and overflow set the truncation flag rather than pretending
+the batch is complete. Entries are ordered by native character GUID.
+
+Cata sources this list from PlayerbotManagedControl::ListFor, not the donor's
+same-account SQL query. Only explicitly configured, account-linked characters
+with current authorization appear, including offline identities; account IDs
+are not transmitted. An empty authorized list produces a valid empty batch.
+Loaded native receipts remain ONLINE while stop is pending and become OFFLINE
+after closure. Loading is OFFLINE for this two-state discovery schema; lifecycle
+polling supplies the more precise CONNECTING state.
+
+The donor's four roster requests per two seconds is enforced using the bounded
+account-keyed requester storage already used by mutation protection. Rejected
+queries return ERR without starting a batch. Client adaptation, gameplay
+endpoints and integrated live validation remain pending; optional capabilities
+are still not advertised. No lifecycle scheduler, SQL or account provisioning
+was added.
+The combined worldserver build and all 85 automated checks passed. The new
+checks exercise roster framing, truncation, presence and query-rate boundaries;
+live authorization and client behavior still need the integrated test.
+
+## MultiBot managed lifecycle endpoints - 2026-09-30
+
+The same bridge upstream HEAD was rechecked and remains
+`1da05982e478cb00e0b6c87314afe7e0e9653ffb`. Protocol basis:
+HandleBridgeOpcode, SendBotLifecycleResultPacket, SendBotLifecycleStatePacket
+and the donor mutation-token/rate contract in `src/MultiBotBridge.cpp`.
+Requests now include `RUN~BOT_CONNECT~guid~token`,
+`RUN~BOT_DISCONNECT~guid~token` and `GET~BOT_LIFECYCLE_STATE~guid~token`.
+Replies retain donor BOT_LIFECYCLE/BOT_LIFECYCLE_STATE field order and encoded
+names. The adapter calls PlayerbotManagedControl, never console commands.
+
+Every mutation rechecks existing managed admission policy; every poll rebuilds
+the authorized list. Revoked links and other-party control expose neither names
+nor receipts. FORBIDDEN replies are access denials, not proof a bot logged out.
+Accepted starts/stops report PENDING. Only native receipt transitions establish
+ONLINE/OFFLINE. Pending teardown uses donor-compatible CONNECTING with STOPPING
+reason because the donor poll parser has no DISCONNECTING state. Pre-teardown
+login failure also remains pending until the session is closed.
+
+Replay/rate storage is world-thread-only and account-keyed, without retained
+Player/session pointers: 64 mutation attempts per two seconds, 320 retained
+tokens per account for two minutes, at most 256 requester accounts. Inactive
+accounts expire after ten minutes; full storage rejects rather than evicting
+live replay protection. Native addon throttling still applies to all requests.
+Unlike donor manager state, Cata receipts supply completion and reserve native
+session capacity; no parallel pending-login scheduler is introduced. Repeat
+connects with a different token currently use native admission rejection rather
+than the donor's ALREADY_ONLINE/ALREADY_CONNECTING success shortcuts.
+
+BOT_LIFECYCLE_V1 is deliberately not advertised yet: offline ALT_ROSTER,
+client adaptation and integrated validation remain pending. Gameplay endpoints
+are also pending. The automated checks cover parsing, receipt-state mapping and
+bounded replay/rate behavior, not live lifecycle authorization.
+The combined worldserver build and all 81 automated checks passed for this slice.
+
+## Initial MultiBot transport - 2026-09-29
+
+Refreshed `Wishmaster117/mod-multibot-bridge` upstream default branch at
+`1da05982e478cb00e0b6c87314afe7e0e9653ffb`. The protocol basis is
+`MultiBotBridge.cpp` HandleBridgeOpcode, SendAddonPacket, BuildRosterPayload
+and the 255-byte envelope budget. This is a small Cata adapter of that contract,
+not a wholesale copy of the WotLK bridge implementation.
+
+Cata decodes the MBOT prefix separately; requests are `HELLO~1`, `PING~token`
+and `GET~ROSTER`. Replies use native Cata addon packets sent privately to the
+requester, including for party/raid requests. The core seam runs on the world
+thread after native channel, throttle and routing checks. Self-whispers and
+valid non-BG party/raid channels are supported; other recipients/channels
+keep native routing. Module-off builds have a no-op seam.
+
+`Playerbots.MultiBot.Enabled` is default-off and fails closed with invalid
+module configuration. Handshake advertises an empty capability set. Roster
+uses existing full-control authorization and the donor's name/class/level/
+map/alive/health/mana columns; it does not disclose accounts or offline
+identities. Oversized rosters fail explicitly rather than silently truncating.
+No database or lifecycle mutation is reachable here. Donor command endpoints,
+managed lifecycle polling, larger roster framing and the Cata client addon
+adaptation remain pending. Automated parser checks do not prove client behavior.
+The combined worldserver build and all 77 automated checks passed for this slice.
+
+## Managed player lifecycle authority - 2026-09-29
+
+`Bot/Cmd/PlayerbotManagedControl` supplies world-thread ListFor/Start/Stop for
+later player transports. It re-resolves the configured identity, native
+character cache, requester session and current party relationship on each call.
+Accepted native requests return an immutable view of their lifecycle receipt.
+No Player/session pointers survive a request. The list omits managed account IDs.
+
+The source basis is `PlayerbotMgr.cpp` account-link admission and
+`Mgr/Security/PlayerbotSecurity.cpp` master/GM relationships at upstream master
+`7bae1b5c58c76a0aa20381155edc08096d1485b2`, refreshed 2026-09-29. The Cata
+adaptation uses a bounded directional config list of humanAccount:botAccount
+pairs instead of importing the donor's linked-account database table. Same-account
+multicharacter admission is excluded because native Cata owns one session per
+account. Guild/random-account, gearscore and population eligibility are deferred.
+
+Player lifecycle access is separately default-off. Ordinary access requires a
+valid managed identity, an in-world human, trusted link and same faction; listing
+or stopping a grouped bot additionally requires existing full party control.
+GM overrides do not bypass the feature gate, native identity or human checks.
+Managed.Enabled gates new starts, while authorized list/stop remains possible
+with admission disabled. Existing console operations retain their separate
+authority. An account link never grants gameplay control or adopts a master.
+
+Four new regression cases cover policy prerequisites, link/party separation,
+direction and revocation, and malformed/excessive links. The combined worldserver
+build and all 75 tests passed. Client transport and native runtime authorization
+checks remain pending; this slice introduces no new player command or endpoint.
+
+## Managed lifecycle receipts - 2026-09-29
+
+The latest managed admission now retains a session-owned receipt containing
+atomic flags and no Player/session pointers. Core publishes native login
+completion, known login failures, explicit stop requests and final session
+closure after logout/save returns. The configured roster retains the receipt
+after session deletion and across reloads of the same account/character binding.
+A new admission gets a new receipt, isolating late observations of old attempts.
+`managed list` uses this state instead of interpreting any non-null Player as
+a completed login. Stopping an existing development session also captures its
+receipt; stop remains available with managed admission disabled.
+
+The source basis is `PlayerbotMgr.cpp` and
+`Script/WorldThr/{PlayerbotOperations.h,PlayerbotWorldThreadProcessor.cpp}` at
+upstream `7bae1b5c58c76a0aa20381155edc08096d1485b2`. The audit found the donor's
+load, queued registration and native logout to be separate boundaries; an
+immediate command `ok` is not an admission result. This receipt is a Cata-native
+adaptation of those boundaries, not a copied donor operation queue or a durable
+database ledger. It does not add account creation or ordinary-player connect
+permission. Native asynchronous database commit success is outside its contract.
+
+Four regression cases cover successful login/exit, failure/cancellation during
+loading, unexpected closure/shutdown and receipt identity across reload/retry.
+Build and automated validation are recorded in the core's current roadmap.
+The configured lifecycle path still needs an integrated runtime check.
+
 Current status, 2026-09-29: the scheduling kernel, session adapter, bounded
 Warrior/Mage/Priest contexts, active roster and normal whisper controls are
 integrated. The release check below confirmed Mage offensive casts, Priest
@@ -11,6 +581,11 @@ upstream master `7bae1b5c58c76a0aa20381155edc08096d1485b2` plus five local
 commits. The upstream commit is available from the public donor repository;
 the local custom revision is not assumed to exist in that repository. Check
 upstream master before new imports and document local additions separately.
+
+The matching core's `doc/local/playerbots/PLAYERBOTS_REFERENCE_GUIDE.md`
+records source authority and secondary Cata comparisons. Modern Playerbots
+remains the architecture donor; ArkCORE NPC bots are a behavior reference only.
+That reference review imported no code and does not establish feature parity.
 
 Foundation extraction: 2026-09-26, from this fork's existing dirty Cata prototype
 on base `efcf6ac83d11fdf4ce86a1b6f95c3b22dfaee14f`. The preserved pre-extraction

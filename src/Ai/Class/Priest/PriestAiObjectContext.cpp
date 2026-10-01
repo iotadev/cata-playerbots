@@ -7,6 +7,7 @@
 #include "PlayerbotPriestStrategy.h"
 #include "../../../Bot/PlayerbotAI.h"
 #include "../../Base/PlayerbotCombatDecision.h"
+#include "../../Base/PlayerbotPartyBuffStrategy.h"
 #include "Group.h"
 #include "Player.h"
 
@@ -175,11 +176,19 @@ struct SharedPriestContexts
     SharedPriestContexts()
     {
         auto* strategyFactory = new NamedObjectContext<Strategy>();
+        strategyFactory->creators["buff"] = [](PlayerbotAI* ai)
+        {
+            return new PlayerbotPartyBuff::Strategy(ai, PlayerbotPartyBuff::PriestAction, ACTION_NORMAL);
+        };
         strategyFactory->creators["heal"] = [](PlayerbotAI* ai) { return new HealPriestStrategy(ai); };
         strategyFactory->creators["nc"] = [](PlayerbotAI* ai) { return new PriestNonCombatStrategy(ai); };
         strategies.Add(strategyFactory);
 
         auto* actionFactory = new NamedObjectContext<Action>();
+        actionFactory->creators[PlayerbotPartyBuff::PriestAction] = [](PlayerbotAI* ai)
+        {
+            return PlayerbotPartyBuff::CreateAction(ai, PlayerbotPartyBuff::PriestAction, PlayerbotPartyBuff::Fortitude);
+        };
         actionFactory->creators["power word: shield on party"] = [](PlayerbotAI* ai) { return new PriestHealAction(ai, "Power Word: Shield", 17, 35.0f); };
         actionFactory->creators["flash heal on party"] = [](PlayerbotAI* ai) { return new PriestHealAction(ai, "Flash Heal", 2061, 55.0f); };
         actionFactory->creators["heal on party"] = [](PlayerbotAI* ai) { return new PriestHealAction(ai, "Heal", 2050, 80.0f); };
@@ -188,6 +197,10 @@ struct SharedPriestContexts
         actions.Add(actionFactory);
 
         auto* triggerFactory = new NamedObjectContext<Trigger>();
+        triggerFactory->creators[PlayerbotPartyBuff::PriestAction] = [](PlayerbotAI* ai)
+        {
+            return PlayerbotPartyBuff::CreateTrigger(ai, PlayerbotPartyBuff::PriestAction, PlayerbotPartyBuff::Fortitude);
+        };
         triggerFactory->creators["party member critical health"] = [](PlayerbotAI* ai) { return new PartyHealthTrigger(ai, "party member critical health", 55.0f); };
         triggerFactory->creators["party member low health"] = [](PlayerbotAI* ai) { return new PartyHealthTrigger(ai, "party member low health", 80.0f); };
         triggerFactory->creators["party member medium health"] = [](PlayerbotAI* ai) { return new PartyHealthTrigger(ai, "party member medium health", 90.0f); };

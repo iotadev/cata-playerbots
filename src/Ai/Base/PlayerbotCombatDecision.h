@@ -64,6 +64,7 @@ inline bool NeedsPartyBuff(bool learned, bool singleAuraPresent, bool partyAuraP
 }
 
 bool MaintainPartyBuff(Player& bot, Player& owner, PartyBuff const& buff);
+bool PartyBuffNeeded(Player& bot, Player& owner, PartyBuff const& buff);
 }
 
 #endif

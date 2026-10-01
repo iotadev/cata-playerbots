@@ -3,28 +3,18 @@
  * Released under GNU GPL v2 or any later version.
  */
 #include "PlayerbotControl.h"
+#include "PlayerbotControlChat.h"
 #include "PlayerbotRoster.h"
 #include "Chat.h"
+#include "Group.h"
 #include "Player.h"
 #include "ScriptMgr.h"
 #include "SharedDefines.h"
 #include "WorldSession.h"
-#include <algorithm>
-#include <cctype>
+#include "World.h"
 
 namespace
 {
-std::string NormalizeCommand(std::string const& text)
-{
-    std::size_t first = text.find_first_not_of(" \t\r\n");
-    if (first == std::string::npos)
-        return {};
-    std::size_t last = text.find_last_not_of(" \t\r\n");
-    std::string command = text.substr(first, last - first + 1);
-    std::transform(command.begin(), command.end(), command.begin(), [](unsigned char c) { return char(std::tolower(c)); });
-    return command;
-}
-
 class PlayerbotChatCommands final : public PlayerScript
 {
 public:
@@ -37,7 +27,7 @@ public:
             !receiver->GetSession() || !receiver->GetSession()->IsServerOrigin())
             return;
 
-        std::string command = NormalizeCommand(message);
+        std::string command = NormalizePlayerbotControlChat(message);
         ChatHandler reply(sender->GetSession());
         if (command == "list")
         {
@@ -51,15 +41,7 @@ public:
         }
 
         PlayerbotControlCommand action;
-        if (command == "follow")
-            action = PlayerbotControlCommand::Follow;
-        else if (command == "stay" || command == "hold")
-            action = PlayerbotControlCommand::Hold;
-        else if (command == "attack")
-            action = PlayerbotControlCommand::Attack;
-        else if (command == "stop" || command == "cease")
-            action = PlayerbotControlCommand::Cease;
-        else
+        if (!ParsePlayerbotControlChat(command, action))
             return;
 
         switch (PlayerbotControl::Dispatch(*sender, receiver->GetGUID(), action))
@@ -77,6 +59,41 @@ public:
                 reply.SendSysMessage("That Playerbot is unavailable.");
                 break;
         }
+    }
+
+    void OnChat(Player* sender, uint32 type, uint32 lang, std::string& message, Group* group) override
+    {
+        bool partyChat = type == CHAT_MSG_PARTY || type == CHAT_MSG_PARTY_LEADER;
+        bool raidChat = type == CHAT_MSG_RAID || type == CHAT_MSG_RAID_LEADER;
+        if ((!partyChat && !raidChat) || lang == LANG_ADDON || !sender || !group ||
+            group->isBGGroup() || !group->IsMember(sender->GetGUID()) || !sender->IsInWorld() ||
+            !sender->GetSession() || sender->GetSession()->IsServerOrigin())
+            return;
+
+        std::string command = NormalizePlayerbotControlChat(message);
+        PlayerbotControlCommand action;
+        if (!ParsePlayerbotControlChat(command, action))
+            return;
+        uint32 queued = 0;
+        uint32 rejected = 0;
+        for (auto const& entry : PlayerbotRoster::ListActiveFor(*sender))
+        {
+            WorldSession* session = sWorld->FindServerOriginPlayerbot(entry.Guid);
+            Player* bot = session ? session->GetPlayer() : nullptr;
+            if (!bot || bot->GetGroup() != group ||
+                !PlayerbotControlChatReaches(raidChat, group->GetMemberGroup(sender->GetGUID()),
+                    group->GetMemberGroup(entry.Guid)))
+                continue;
+            // Dispatch independently rechecks native identity and full control.
+            if (PlayerbotControl::Dispatch(*sender, entry.Guid, action) == PlayerbotControlResult::Queued)
+                ++queued;
+            else
+                ++rejected;
+        }
+        if (queued || rejected)
+            ChatHandler(sender->GetSession()).PSendSysMessage("Playerbots: %s requested for %u bot(s); %u rejected.",
+                command.c_str(), queued, rejected);
+        // Preserve normal chat delivery, including to human group members.
     }
 };
 }

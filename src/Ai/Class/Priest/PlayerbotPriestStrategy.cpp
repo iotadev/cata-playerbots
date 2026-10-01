@@ -12,6 +12,7 @@
 #include "Log.h"
 #include "Player.h"
 #include "PlayerbotCombatDecision.h"
+#include "PlayerbotPartyBuffStrategy.h"
 
 void PlayerbotPriest::LogKnownAbilities(Player const& bot)
 {
@@ -24,8 +25,7 @@ bool PlayerbotPriest::MaintainBuff(Player& bot, Player& owner)
     if (bot.getClass() != CLASS_PRIEST)
         return false;
     // Cata's 21562 dummy cast applies 79104 alone or 79105 to the party.
-    constexpr PlayerbotDecision::PartyBuff fortitude { 21562, 79104, 79105, "Power Word: Fortitude" };
-    return PlayerbotDecision::MaintainPartyBuff(bot, owner, fortitude);
+    return PlayerbotDecision::MaintainPartyBuff(bot, owner, PlayerbotPartyBuff::Fortitude);
 }
 
 std::vector<Player*> PlayerbotPriest::HealCandidates(Player& bot, Player* owner)

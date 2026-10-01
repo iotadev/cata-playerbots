@@ -12,6 +12,7 @@
 #include "Log.h"
 #include "Player.h"
 #include "PlayerbotCombatDecision.h"
+#include "PlayerbotPartyBuffStrategy.h"
 #include <cmath>
 
 namespace
@@ -63,6 +64,5 @@ bool PlayerbotMage::MaintainBuff(Player& bot, Player& owner)
     // Armor choice belongs to the upcoming talent-aware rotation profile;
     // do not impose one armor preference on all three Mage specializations.
     // The core's generic buff script expands 1459 into single/party auras.
-    constexpr PlayerbotDecision::PartyBuff brilliance { 1459, 79057, 79058, "Arcane Brilliance" };
-    return PlayerbotDecision::MaintainPartyBuff(bot, owner, brilliance);
+    return PlayerbotDecision::MaintainPartyBuff(bot, owner, PlayerbotPartyBuff::Brilliance);
 }

@@ -4,6 +4,7 @@
  */
 #include "PlayerbotModuleCommands.h"
 #include "PlayerbotManagedRoster.h"
+#include "RandomPlayerbotFactory.h"
 #include "CharacterCache.h"
 #include "Chat.h"
 #include "RBAC.h"
@@ -570,6 +571,96 @@ public:
         std::string guidText;
         std::string extra;
         input >> action >> guidText;
+        if (action == "enroll" || action == "provision" || action == "factory-status")
+        {
+            uint32 accountId = 0;
+            auto parseNumber = [](std::string const& text, uint32& value)
+            {
+                auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), value);
+                return !text.empty() && error == std::errc{} && end == text.data() + text.size();
+            };
+            bool valid = parseNumber(guidText, accountId) && accountId;
+            std::string name, raceText, classText, genderText;
+            uint32 race = 0, classId = 0, gender = 0;
+            if (action == "enroll")
+            {
+                input >> name >> raceText >> classText >> genderText;
+                valid = valid && !name.empty() && parseNumber(raceText, race) && race <= 255 &&
+                    parseNumber(classText, classId) && classId <= 255 && parseNumber(genderText, gender) && gender <= 1;
+            }
+            input >> extra;
+            if (!valid || !extra.empty())
+            {
+                handler->SendSysMessage("Usage: managed enroll <dedicated account ID> <name> <race ID> <class ID> <gender 0|1> | provision <account ID> | factory-status <account ID>");
+                handler->SetSentErrorMessage(true);
+                return false;
+            }
+            if (action == "factory-status")
+            {
+                handler->PSendSysMessage("Factory status: %s.", RandomPlayerbotFactory::DescribeAttempt(accountId).c_str());
+                return true;
+            }
+            std::string detail;
+            bool accepted = action == "enroll" ? RandomPlayerbotFactory::EnrollAccount(
+                {accountId, name, uint8(race), uint8(classId), uint8(gender)}, detail) :
+                RandomPlayerbotFactory::ProvisionAccount(accountId, detail);
+            handler->PSendSysMessage("Factory %s: %s.", accepted ? "request accepted" : "request rejected", detail.c_str());
+            if (!accepted)
+                handler->SetSentErrorMessage(true);
+            return accepted;
+        }
+        if (action == "inspect")
+        {
+            input >> extra;
+            uint32 accountId = 0;
+            auto [end, error] = std::from_chars(guidText.data(), guidText.data() + guidText.size(), accountId);
+            if (guidText.empty() || !extra.empty() || error != std::errc{} ||
+                end != guidText.data() + guidText.size() || !accountId)
+            {
+                handler->SendSysMessage("Usage: server playerbotdev managed inspect <dedicated account ID>");
+                handler->SetSentErrorMessage(true);
+                return false;
+            }
+            std::string detail;
+            auto decision = RandomPlayerbotFactory::InspectOwnedAccount(accountId, detail);
+            char const* label = decision == PlayerbotFactoryDecision::Create ? "create draft" :
+                decision == PlayerbotFactoryDecision::Reuse ? "reuse draft" : "rejected";
+            handler->PSendSysMessage("Read-only factory inspection: %s; %s. No writes or admission performed.", label, detail.c_str());
+            return true;
+        }
+        if (action == "appearance")
+        {
+            std::string classText, genderText;
+            input >> classText >> genderText >> extra;
+            auto parseByte = [](std::string const& text, uint8& value)
+            {
+                uint32 parsed = 0;
+                auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), parsed);
+                if (text.empty() || error != std::errc{} || end != text.data() + text.size() || parsed > 255)
+                    return false;
+                value = uint8(parsed);
+                return true;
+            };
+            uint8 race = 0, classId = 0, gender = 0;
+            if (!extra.empty() || !parseByte(guidText, race) || !parseByte(classText, classId) || !parseByte(genderText, gender))
+            {
+                handler->SendSysMessage("Usage: server playerbotdev managed appearance <race ID> <class ID> <gender 0|1>");
+                handler->SetSentErrorMessage(true);
+                return false;
+            }
+            std::string failure;
+            auto appearance = RandomPlayerbotFactory::PreviewAppearance(race, classId, gender, failure);
+            if (!appearance)
+            {
+                handler->PSendSysMessage("Playerbot appearance draft rejected: %s.", failure.c_str());
+                handler->SetSentErrorMessage(true);
+                return false;
+            }
+            handler->PSendSysMessage("Read-only Playerbot appearance: race %u class %u gender %u skin %u face %u hair %u color %u facial %u. No account or character created; account/name eligibility not checked.",
+                uint32(race), uint32(classId), uint32(gender), uint32(appearance->Skin), uint32(appearance->Face),
+                uint32(appearance->HairStyle), uint32(appearance->HairColor), uint32(appearance->FacialHair));
+            return true;
+        }
         if (action == "list" && guidText.empty())
         {
             if (PlayerbotManagedRoster::List().empty())
@@ -579,7 +670,8 @@ public:
                 ObjectGuid characterGuid = ObjectGuid::Create<HighGuid::Player>(identity.CharacterGuidLow);
                 CharacterCacheEntry const* character = sCharacterCache->GetCharacterCacheByGuid(characterGuid);
                 WorldSession* session = sWorld->FindServerOriginPlayerbot(characterGuid);
-                char const* state = session ? (session->GetPlayer() ? "online" : "loading") : "offline";
+                auto receipt = session ? session->GetServerOriginLifecycle() : identity.Lifecycle;
+                char const* state = receipt ? ServerOriginPlayerbotLifecycle::Describe(receipt->GetState()) : "offline";
                 if (character && character->AccountId == identity.AccountId)
                     handler->PSendSysMessage("Playerbot %s (GUID %u, account %u, level %u, class %u): %s.",
                         character->Name.c_str(), identity.CharacterGuidLow, identity.AccountId,
@@ -625,11 +717,26 @@ public:
                 handler->SetSentErrorMessage(true);
                 return false;
             }
+            WorldSession* session = sWorld->FindServerOriginPlayerbot(characterGuid);
+            ASSERT(session && session->GetAccountId() == identity->AccountId);
+            PlayerbotManagedRoster::Track(identity->AccountId, guidLow, session->GetServerOriginLifecycle());
             handler->PSendSysMessage("Managed Playerbot %u admitted; character loading is asynchronous.", guidLow);
         }
         else
+        {
+            if (WorldSession* session = sWorld->FindServerOriginPlayerbot(characterGuid))
+            {
+                if (session->GetAccountId() != identity->AccountId)
+                {
+                    handler->SendSysMessage("Managed Playerbot account does not match the active session.");
+                    handler->SetSentErrorMessage(true);
+                    return false;
+                }
+                PlayerbotManagedRoster::Track(identity->AccountId, guidLow, session->GetServerOriginLifecycle());
+            }
             handler->PSendSysMessage("Managed Playerbot %u %s.", guidLow,
                 sWorld->RequestStopServerOriginPlayerbot(characterGuid) ? "exit requested" : "is offline");
+        }
         return true;
     }
 

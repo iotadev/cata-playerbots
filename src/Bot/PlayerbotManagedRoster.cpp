@@ -12,6 +12,8 @@
 namespace
 {
 std::vector<ManagedPlayerbotIdentity> managedIdentities;
+std::vector<std::pair<uint32, uint32>> accountLinks;
+bool playerControlEnabled = false;
 
 std::string_view Trim(std::string_view value)
 {
@@ -53,7 +55,10 @@ bool PlayerbotManagedRoster::Configure(std::string const& bindings)
             return false;
         }
 
-        parsed.push_back({ accountId, guidLow });
+        // Preserve the receipt across a settings reload only for the same owner.
+        ManagedPlayerbotIdentity const* previous = Find(guidLow);
+        parsed.push_back({ accountId, guidLow,
+            previous && previous->AccountId == accountId ? previous->Lifecycle : nullptr });
         if (separator == std::string_view::npos)
             break;
         remaining = Trim(remaining.substr(separator + 1));
@@ -78,4 +83,66 @@ ManagedPlayerbotIdentity const* PlayerbotManagedRoster::Find(uint32 characterGui
     auto found = std::find_if(managedIdentities.begin(), managedIdentities.end(),
         [characterGuidLow](ManagedPlayerbotIdentity const& entry) { return entry.CharacterGuidLow == characterGuidLow; });
     return found == managedIdentities.end() ? nullptr : &*found;
+}
+
+bool PlayerbotManagedRoster::Track(uint32 accountId, uint32 characterGuidLow,
+    std::shared_ptr<ServerOriginPlayerbotLifecycle> lifecycle)
+{
+    auto found = std::find_if(managedIdentities.begin(), managedIdentities.end(),
+        [accountId, characterGuidLow](ManagedPlayerbotIdentity const& entry)
+        { return entry.AccountId == accountId && entry.CharacterGuidLow == characterGuidLow; });
+    if (found == managedIdentities.end() || !lifecycle)
+        return false;
+    found->Lifecycle = std::move(lifecycle);
+    return true;
+}
+
+bool PlayerbotManagedRoster::ConfigureAccountLinks(std::string const& links)
+{
+    std::vector<std::pair<uint32, uint32>> parsed;
+    std::string_view remaining = Trim(links);
+    while (!remaining.empty())
+    {
+        std::size_t separator = remaining.find(',');
+        std::string_view item = Trim(remaining.substr(0, separator));
+        std::size_t colon = item.find(':');
+        uint32 requester = 0;
+        uint32 bot = 0;
+        if (colon == std::string_view::npos || !ParsePositive(item.substr(0, colon), requester) ||
+            !ParsePositive(item.substr(colon + 1), bot) || requester == bot || parsed.size() >= 256 ||
+            std::find(parsed.begin(), parsed.end(), std::make_pair(requester, bot)) != parsed.end())
+        {
+            accountLinks.clear();
+            playerControlEnabled = false;
+            return false;
+        }
+        parsed.emplace_back(requester, bot);
+        if (separator == std::string_view::npos)
+            break;
+        remaining = Trim(remaining.substr(separator + 1));
+        if (remaining.empty())
+        {
+            accountLinks.clear();
+            playerControlEnabled = false;
+            return false;
+        }
+    }
+    accountLinks = std::move(parsed);
+    return true;
+}
+
+bool PlayerbotManagedRoster::IsAccountLinked(uint32 requesterAccountId, uint32 botAccountId)
+{
+    return requesterAccountId && botAccountId && std::find(accountLinks.begin(), accountLinks.end(),
+        std::make_pair(requesterAccountId, botAccountId)) != accountLinks.end();
+}
+
+void PlayerbotManagedRoster::SetPlayerControlEnabled(bool enabled)
+{
+    playerControlEnabled = enabled;
+}
+
+bool PlayerbotManagedRoster::IsPlayerControlEnabled()
+{
+    return playerControlEnabled;
 }

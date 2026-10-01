@@ -1,5 +1,21 @@
 [playerbots]
 
+# Read-only console factory inspection. Requires the optional auth schema in
+# sql/auth/001_factory_ownership.sql and explicit dedicated-account evidence.
+# This does not enable account enrollment, character creation or admission.
+Playerbots.Factory.InspectionEnabled = 0
+
+# Console-only explicit dedication of pre-created, empty ordinary accounts,
+# followed by native create or exact-identity accounting recovery. Requires the
+# optional auth schema. Enables inspection too; never auto-admits or grants
+# player control. No automatic account creation/population/deletion.
+Playerbots.Factory.Enabled = 0
+
+# MultiBot transport: HELLO, PING, active ROSTER, managed ALT_ROSTER and lifecycle.
+# Managed mutations also require the Managed settings and account authorization.
+# Only ALT_ROSTER_V1/BOT_LIFECYCLE_V1 are advertised when player lifecycle is enabled.
+Playerbots.MultiBot.Enabled = 0
+
 # Optional mod-playerbots configuration. These values override legacy options
 # in worldserver.conf. Missing files retain legacy settings and compiled defaults.
 
@@ -30,6 +46,12 @@ Playerbots.Dev.GreetingOnJoin = 1
 #        Default:     0 - (Existing companion buff behavior)
 
 Playerbots.Dev.EngineWarriorBuff = 0
+
+# Route Mage Brilliance/Priest Fortitude party upkeep through the existing
+# class engine instead of the direct fallback. Native Cata aura/cast checks
+# are unchanged. No new spells, armor preference or autonomous behavior.
+# Default: 0 (existing upkeep). Restart to compare paths reliably.
+Playerbots.Dev.EnginePartyBuff = 0
 
 #
 #    Playerbots.Dev.EngineWarriorCombat
@@ -127,3 +149,16 @@ Playerbots.Managed.Enabled = 0
 #        Default:     (empty)
 
 Playerbots.Managed.Characters =
+
+# Player-facing lifecycle service. Requires an addon/command transport; the
+# current ordinary whispers still control only admitted bots. Disabled by default.
+# Managed.Enabled also gates new starts; stopping/listing do not require it.
+Playerbots.Managed.AllowPlayerControl = 0
+
+# Comma-separated humanAccountId:botAccountId trusted links, e.g. 1:101,1:102.
+# Links are directional; each pair must be unique and use distinct positive IDs.
+# At most 256 pairs. These grant lifecycle access, not automatic party control.
+# Normal players must share faction; stopping a grouped bot also requires its
+# current party control. GMs bypass links/faction/party checks while this service
+# is enabled. Invalid links disable player access; console controls remain usable.
+Playerbots.Managed.AccountLinks =

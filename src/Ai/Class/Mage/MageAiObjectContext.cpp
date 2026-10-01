@@ -7,6 +7,7 @@
 #include "MageAiObjectContext.h"
 #include "../../../Bot/PlayerbotAI.h"
 #include "../../Base/PlayerbotCombatDecision.h"
+#include "../../Base/PlayerbotPartyBuffStrategy.h"
 #include "Creature.h"
 #include "Player.h"
 #include <cmath>
@@ -118,11 +119,19 @@ struct SharedMageContexts
     SharedMageContexts()
     {
         auto* strategyFactory = new NamedObjectContext<Strategy>();
+        strategyFactory->creators["buff"] = [](PlayerbotAI* ai)
+        {
+            return new PlayerbotPartyBuff::Strategy(ai, PlayerbotPartyBuff::MageAction, ACTION_HIGH);
+        };
         strategyFactory->creators["mage"] = [](PlayerbotAI* ai) { return new GenericMageStrategy(ai); };
         strategyFactory->creators["frost"] = [](PlayerbotAI* ai) { return new FrostMageStrategy(ai); };
         strategies.Add(strategyFactory);
 
         auto* actionFactory = new NamedObjectContext<Action>();
+        actionFactory->creators[PlayerbotPartyBuff::MageAction] = [](PlayerbotAI* ai)
+        {
+            return PlayerbotPartyBuff::CreateAction(ai, PlayerbotPartyBuff::MageAction, PlayerbotPartyBuff::Brilliance);
+        };
         actionFactory->creators["frost nova"] = [](PlayerbotAI* ai) { return new MageSpellAction(ai, "frost nova", 122, true, true); };
         actionFactory->creators["fire blast"] = [](PlayerbotAI* ai) { return new MageSpellAction(ai, "fire blast", 2136, false, true); };
         actionFactory->creators["frostbolt"] = [](PlayerbotAI* ai) { return new MageSpellAction(ai, "frostbolt", 116); };
@@ -130,6 +139,10 @@ struct SharedMageContexts
         actions.Add(actionFactory);
 
         auto* triggerFactory = new NamedObjectContext<Trigger>();
+        triggerFactory->creators[PlayerbotPartyBuff::MageAction] = [](PlayerbotAI* ai)
+        {
+            return PlayerbotPartyBuff::CreateTrigger(ai, PlayerbotPartyBuff::MageAction, PlayerbotPartyBuff::Brilliance);
+        };
         triggerFactory->creators["enemy is close"] = [](PlayerbotAI* ai) { return new CloseEnemyTrigger(ai); };
         triggers.Add(triggerFactory);
     }

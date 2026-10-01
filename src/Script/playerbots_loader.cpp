@@ -5,6 +5,7 @@
 #include "ScriptMgr.h"
 #include "Log.h"
 #include "World.h"
+#include "RandomPlayerbotFactory.h"
 
 void AddSC_playerbot_chat_commands();
 
@@ -14,6 +15,10 @@ class PlayerbotsModuleWorldScript final : public WorldScript
 {
 public:
     PlayerbotsModuleWorldScript() : WorldScript("PlayerbotsModuleWorldScript") { }
+    void OnUpdate(uint32 /*diff*/) override
+    {
+        RandomPlayerbotFactory::UpdateCallbacks();
+    }
     void OnStartup() override
     {
         TC_LOG_INFO("server.loading", "Optional mod-playerbots loaded; development admission %s",

@@ -1,0 +1,71 @@
+diff --git a/Core/MultiBot.lua b/Core/MultiBot.lua
+--- a/Core/MultiBot.lua
++++ b/Core/MultiBot.lua
+@@ -20,7 +20,6 @@ ensureValue(MultiBot, "_initEventsRegistered", false)
+ local CORE_EVENTS = {
+   "WORLD_MAP_UPDATE",
+   "PLAYER_ENTERING_WORLD",
+-  "GROUP_ROSTER_UPDATE",
+   "PARTY_MEMBERS_CHANGED",
+   "RAID_ROSTER_UPDATE",
+   "UNIT_PET",
+diff --git a/Core/MultiBotComm.lua b/Core/MultiBotComm.lua
+--- a/Core/MultiBotComm.lua
++++ b/Core/MultiBotComm.lua
+@@ -11,6 +11,11 @@ MultiBot.Comm = Comm
+ Comm.prefix = "MBOT"
+ Comm.version = "1"
+ 
++-- Cata requires addon prefixes to be registered before receiving messages.
++-- Fail closed on missing registration instead of claiming a working bridge.
++Comm.cataPrefixRegistered = type(RegisterAddonMessagePrefix) == "function"
++  and RegisterAddonMessagePrefix(Comm.prefix) == true
++
+ local STATE_FRAMING_CAPABILITY = "STATE_FRAMING_V1"
+ local STRATEGY_MUTATION_CAPABILITY = "STRATEGY_MUTATION_V1"
+ local SELF_ACTION_CAPABILITY = "SELF_ACTION_V1"
+@@ -670,6 +675,9 @@ local function buildMessage(opcode, payload)
+ end
+ 
+ function Comm.Send(opcode, payload)
++  if not Comm.cataPrefixRegistered then
++    return false
++  end
+   local state = ensureBridgeState()
+   local playerName = getPlayerName()
+   if not playerName or type(SendAddonMessage) ~= "function" then
+diff --git a/UI/MultiBotSpellBookFrame.lua b/UI/MultiBotSpellBookFrame.lua
+--- a/UI/MultiBotSpellBookFrame.lua
++++ b/UI/MultiBotSpellBookFrame.lua
+@@ -487,7 +487,12 @@ function MultiBot.InitializeSpellBookFrame()
+ 		return self
+ 	end
+ 
+-	for i = 1, GetNumMacroIcons() do MultiBot.spellbook.icons[GetMacroIconInfo(i)] = i end
++	-- Cata fills a caller-owned list instead of exposing indexed macro icons.
++	local macroIcons = {}
++	GetMacroIcons(macroIcons)
++	for i, texture in ipairs(macroIcons) do
++		MultiBot.spellbook.icons["Interface\\Icons\\" .. texture] = i
++	end
+ 
+ 	-- Default baseline position (legacy parity), can be overridden by saved layout restore.
+ 	MultiBot.spellbook.setPoint(-802, 302)
+diff --git a/MultiBot.toc b/MultiBot.toc
+--- a/MultiBot.toc
++++ b/MultiBot.toc
+@@ -1,4 +1,4 @@
+-## Interface: 30300
++## Interface: 40300
+ ## Version: 4.0
+ ## Title: MultiBot
+ ## Notes: User Interface for Playerbot
+@@ -19,7 +19,7 @@ Libs\AceDB-3.0\AceDB-3.0.lua
+ Libs\AceLocale-3.0\AceLocale-3.0.lua
+ Libs\AceTimer-3.0\AceTimer-3.0.lua
+ Libs\AceGUI-3.0\AceGUI-3.0.xml
+-Libs\LibDBIcon-1.0\LibDBIcon-1.0.lua
+ Libs\libdatabroker-1-1\LibDataBroker-1.1.lua
++Libs\LibDBIcon-1.0\LibDBIcon-1.0.lua
+ Libs\LibDropdown-1.0\LibDropdown-1.0.lua
+ 

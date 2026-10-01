@@ -5,6 +5,7 @@
 #include "PlayerbotSessionBehavior.h"
 #include "WorldSession.h"
 #include "Creature.h"
+#include "DBCStores.h"
 #include "Group.h"
 #include "Log.h"
 #include "Map.h"
@@ -51,6 +52,7 @@ void PlayerbotSessionBehavior::UpdateMap(uint32 diff)
             {
                 _aiContext = std::make_unique<MageAiObjectContext>(&_ai);
                 _engine = std::make_unique<Engine>(&_ai, *_aiContext);
+                _engine->AddStrategy("buff");
                 _engine->AddStrategy(bot->GetPrimaryTalentTree(bot->GetActiveSpec()) == TALENT_TREE_MAGE_FROST ? "frost" : "mage");
             }
             else if (bot->getClass() == CLASS_PRIEST)
@@ -59,6 +61,7 @@ void PlayerbotSessionBehavior::UpdateMap(uint32 diff)
                 _engine = std::make_unique<Engine>(&_ai, *_aiContext);
                 _engine->AddStrategy("heal");
                 _engine->AddStrategy("nc");
+                _engine->AddStrategy("buff");
             }
 
     UpdateServerOriginParty();
@@ -556,7 +559,16 @@ void PlayerbotSessionBehavior::UpdateServerOriginCombat(uint32 diff)
             }
             else
                 PlayerbotWarrior::MaintainBuff(*_player);
-            if (Player* owner = _player->GetMap()->GetPlayer(ObjectGuid::Create<HighGuid::Player>(_serverOriginFollowTargetGuidLow.load())))
+            bool enginePartyBuff = _engine && PlayerbotModuleEnginePartyBuffEnabled() &&
+                (_player->getClass() == CLASS_MAGE || _player->getClass() == CLASS_PRIEST);
+            if (enginePartyBuff)
+            {
+                // Priest healing already ticks this same engine at its own cadence.
+                // Do not run a second decision or also invoke the direct fallback.
+                if (_player->getClass() != CLASS_PRIEST || !PlayerbotModuleEnginePriestHealEnabled())
+                    _engine->Tick();
+            }
+            else if (Player* owner = _player->GetMap()->GetPlayer(ObjectGuid::Create<HighGuid::Player>(_serverOriginFollowTargetGuidLow.load())))
             {
                 PlayerbotMage::MaintainBuff(*_player, *owner);
                 PlayerbotPriest::MaintainBuff(*_player, *owner);

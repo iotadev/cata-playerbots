@@ -56,7 +56,10 @@ bool PlayerbotDecision::ExecuteFirstAvailable(Player& bot, Creature& target, std
     return ExecuteByPriority(actions, eligible, attempt);
 }
 
-bool PlayerbotDecision::MaintainPartyBuff(Player& bot, Player& owner, PartyBuff const& buff)
+namespace
+{
+template <typename Attempt>
+bool VisitPartyBuffCandidates(Player& bot, Player& owner, PlayerbotDecision::PartyBuff const& buff, Attempt&& attempt)
 {
     if (!bot.IsAlive() || !owner.IsAlive() || bot.IsInCombat() || owner.IsInCombat() ||
         bot.IsNonMeleeSpellCast(false) || !bot.HasSpell(buff.SpellId) || bot.GetMap() != owner.GetMap())
@@ -67,8 +70,8 @@ bool PlayerbotDecision::MaintainPartyBuff(Player& bot, Player& owner, PartyBuff 
         if (!member || !member->IsAlive() || member->IsInCombat() || member->GetMap() != bot.GetMap() ||
             (member != &bot && (!bot.IsWithinDistInMap(member, 30.0f) || !bot.IsWithinLOSInMap(member))))
             return false;
-        return NeedsPartyBuff(true, member->HasAura(buff.SingleAuraId), member->HasAura(buff.PartyAuraId)) &&
-            TryCast(bot, *member, buff.SpellId, buff.Name);
+        return PlayerbotDecision::NeedsPartyBuff(true, member->HasAura(buff.SingleAuraId), member->HasAura(buff.PartyAuraId)) &&
+            attempt(*member);
     };
 
     if (apply(&bot) || apply(&owner))
@@ -79,4 +82,18 @@ bool PlayerbotDecision::MaintainPartyBuff(Player& bot, Player& owner, PartyBuff 
             if (ref->GetSource() != &bot && ref->GetSource() != &owner && apply(ref->GetSource()))
                 return true;
     return false;
+}
+}
+
+bool PlayerbotDecision::PartyBuffNeeded(Player& bot, Player& owner, PartyBuff const& buff)
+{
+    return VisitPartyBuffCandidates(bot, owner, buff, [](Player&) { return true; });
+}
+
+bool PlayerbotDecision::MaintainPartyBuff(Player& bot, Player& owner, PartyBuff const& buff)
+{
+    return VisitPartyBuffCandidates(bot, owner, buff, [&](Player& member)
+    {
+        return TryCast(bot, member, buff.SpellId, buff.Name);
+    });
 }

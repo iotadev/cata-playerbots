@@ -19,8 +19,8 @@ struct PlayerbotRosterEntry
     uint8 Level = 0;
 };
 
-// Active, controllable bots only. Offline managed characters need a factory
-// and persistent ownership data before they can appear in this roster.
+// Active, controllable bots only. Configured offline identities are exposed
+// separately through PlayerbotManagedControl, with account-link authorization.
 class PlayerbotRoster
 {
 public:

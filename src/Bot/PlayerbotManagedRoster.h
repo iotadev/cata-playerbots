@@ -7,6 +7,8 @@
 #define CATA_PLAYERBOTS_MANAGED_ROSTER_H
 
 #include "Define.h"
+#include "ServerOriginPlayerbotLifecycle.h"
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -14,6 +16,7 @@ struct ManagedPlayerbotIdentity
 {
     uint32 AccountId;
     uint32 CharacterGuidLow;
+    std::shared_ptr<ServerOriginPlayerbotLifecycle> Lifecycle;
 };
 
 // Configured identities are independent of a temporary party controller.
@@ -24,6 +27,12 @@ public:
     static bool Configure(std::string const& bindings);
     static std::vector<ManagedPlayerbotIdentity> const& List();
     static ManagedPlayerbotIdentity const* Find(uint32 characterGuidLow);
+    static bool Track(uint32 accountId, uint32 characterGuidLow,
+        std::shared_ptr<ServerOriginPlayerbotLifecycle> lifecycle);
+    static bool ConfigureAccountLinks(std::string const& links);
+    static bool IsAccountLinked(uint32 requesterAccountId, uint32 botAccountId);
+    static void SetPlayerControlEnabled(bool enabled);
+    static bool IsPlayerControlEnabled();
 };
 
 #endif
