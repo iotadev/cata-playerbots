@@ -4,12 +4,22 @@
  */
 #include "PlayerbotSessionHooks.h"
 #include "PlayerbotConfig.h"
+#include "PlayerbotDevFixture.h"
 #include "PlayerbotManagedRoster.h"
 #include "PlayerbotAddonProtocol.h"
 #include "RandomPlayerbotFactory.h"
 #include "Config.h"
 #include "Log.h"
 #include "World.h"
+#include <atomic>
+namespace { std::atomic<bool> RestEnabled { false }; }
+namespace { std::atomic<bool> MageArmorEnabled { false }; }
+namespace { std::atomic<bool> LootPassEnabled { false }; }
+namespace { std::atomic<bool> CorpseLootEnabled { false }; }
+bool PlayerbotModuleCorpseLootEnabled() { return CorpseLootEnabled.load(std::memory_order_relaxed); }
+bool PlayerbotModuleLootPassEnabled() { return LootPassEnabled.load(std::memory_order_relaxed); }
+bool PlayerbotModuleMageArmorEnabled() { return MageArmorEnabled.load(std::memory_order_relaxed); }
+bool PlayerbotModuleRestEnabled() { return RestEnabled.load(std::memory_order_relaxed); }
 bool PlayerbotModuleEngineWarriorBuffEnabled()
 {
     return sConfigMgr->GetBoolDefault("Playerbots.Dev.EngineWarriorBuff", false);
@@ -37,6 +47,16 @@ bool PlayerbotModuleEnginePriestHealEnabled()
 
 void LoadPlayerbotModuleSettings(World& world, bool moduleConfigsValid)
 {
+    PlayerbotDevFixture::SetEnabled(moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.Dev.Enabled", false) &&
+        sConfigMgr->GetBoolDefault("Playerbots.Dev.Fixture20.Enabled", false));
+    CorpseLootEnabled.store(moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.Loot.Corpses.Enabled", false),
+        std::memory_order_relaxed);
+    LootPassEnabled.store(moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.Loot.PassOnGroupLoot", false),
+        std::memory_order_relaxed);
+    MageArmorEnabled.store(moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.Mage.Armor.Enabled", false),
+        std::memory_order_relaxed);
+    RestEnabled.store(moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.Rest.Enabled", false),
+        std::memory_order_relaxed);
     bool factoryEnabled = moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.Factory.Enabled", false);
     RandomPlayerbotFactory::SetProvisioningEnabled(factoryEnabled);
     RandomPlayerbotFactory::SetInspectionEnabled(factoryEnabled || (moduleConfigsValid &&

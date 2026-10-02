@@ -8,6 +8,7 @@
  */
 
 #include "PlayerbotCombatDecision.h"
+#include "PlayerbotPartySupport.h"
 #include "Creature.h"
 #include "Group.h"
 #include "Log.h"
@@ -19,11 +20,17 @@
 bool PlayerbotDecision::TryCast(Player& bot, Unit& target, std::uint32_t spellId, char const* name)
 {
     SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(spellId);
+    if (!spellInfo || !bot.HasSpell(spellId))
+        return false;
+    // Match native pending casts: authorize the learned base spell first,
+    // then resolve any current action-bar override and native cost flags.
+    TriggerCastFlags triggerFlags = TRIGGERED_NONE;
+    spellInfo = bot.GetCastSpellInfo(spellInfo, triggerFlags);
     if (!spellInfo || bot.GetSpellHistory()->HasGlobalCooldown(spellInfo) ||
         bot.GetSpellHistory()->HasCooldown(spellInfo) || !bot.CanRequestSpellCast(spellInfo))
         return false;
 
-    Spell* spell = new Spell(&bot, spellInfo, TRIGGERED_NONE);
+    Spell* spell = new Spell(&bot, spellInfo, triggerFlags);
     if (!spell->CanAutoCast(&target))
     {
         delete spell;
@@ -54,6 +61,44 @@ bool PlayerbotDecision::ExecuteFirstAvailable(Player& bot, Creature& target, std
     };
 
     return ExecuteByPriority(actions, eligible, attempt);
+}
+
+std::vector<Player*> PlayerbotPartySupport::Candidates(Player& bot, Player* owner)
+{
+    std::vector<Player*> candidates;
+    if (!bot.IsAlive())
+        return candidates;
+    auto consider = [&](Player* member)
+    {
+        if (!member || !member->IsAlive() || member->GetMap() != bot.GetMap() ||
+            (member != &bot && (!bot.IsWithinDistInMap(member, 30.0f) || !bot.IsWithinLOSInMap(member))))
+            return;
+        if (std::find(candidates.begin(), candidates.end(), member) == candidates.end())
+            candidates.push_back(member);
+    };
+    consider(&bot);
+    consider(owner);
+    if (Group* group = bot.GetGroup())
+        for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+            consider(ref->GetSource());
+    return candidates;
+}
+
+bool PlayerbotPartySupport::HasDispellableAura(Player& bot, Player& target, std::uint32_t spellId, std::uint32_t dispelType)
+{
+    SpellInfo const* spell = sSpellMgr->GetSpellInfo(spellId);
+    if (!spell || !target.IsAlive() || !bot.IsFriendlyTo(&target) || target.GetMap() != bot.GetMap() ||
+        !bot.IsWithinDistInMap(&target, 30.0f) || !bot.IsWithinLOSInMap(&target))
+        return false;
+    bool matchingDispel = false;
+    for (SpellEffectInfo const& effect : spell->Effects)
+        if (effect.IsEffect(SPELL_EFFECT_DISPEL) && effect.MiscValue == int32(dispelType))
+            matchingDispel = true;
+    if (!matchingDispel)
+        return false;
+    DispelChargesList auras;
+    target.GetDispellableAuraList(&bot, SpellInfo::GetDispelMask(DispelType(dispelType)), auras);
+    return !auras.empty(); // No native aura pointer survives this call.
 }
 
 namespace

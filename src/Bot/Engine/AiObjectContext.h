@@ -25,7 +25,7 @@ public:
                     SharedNamedObjectContextList<Action>& sharedActionContext = sharedActionContexts,
                     SharedNamedObjectContextList<Trigger>& sharedTriggerContext = sharedTriggerContexts,
                     SharedNamedObjectContextList<UntypedValue>& sharedValueContext = sharedValueContexts);
-    virtual ~AiObjectContext() = default;
+    virtual ~AiObjectContext();
 
     virtual Strategy* GetStrategy(std::string const name);
     virtual std::set<std::string> GetSiblingStrategy(std::string const name);

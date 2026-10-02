@@ -30,28 +30,7 @@ bool PlayerbotPriest::MaintainBuff(Player& bot, Player& owner)
 
 std::vector<Player*> PlayerbotPriest::HealCandidates(Player& bot, Player* owner)
 {
-    std::vector<Player*> candidates;
-    if (bot.getClass() != CLASS_PRIEST || !bot.IsAlive())
-        return candidates;
-    auto consider = [&](Player* member)
-    {
-        if (!member || !member->IsAlive() || member->GetMap() != bot.GetMap() ||
-            (member != &bot && (!bot.IsWithinDistInMap(member, 30.0f) || !bot.IsWithinLOSInMap(member))))
-            return;
-
-        // Self and owner also appear in group iteration; try each only once.
-        if (std::find(candidates.begin(), candidates.end(), member) == candidates.end())
-            candidates.push_back(member);
-    };
-
-    consider(&bot);
-    consider(owner);
-    Group* group = bot.GetGroup();
-    if (group)
-        for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
-            consider(ref->GetSource());
-
-    return candidates;
+    return bot.getClass() == CLASS_PRIEST ? PlayerbotPartySupport::Candidates(bot, owner) : std::vector<Player*>{};
 }
 
 bool PlayerbotPriest::HealParty(Player& bot, Player* owner)

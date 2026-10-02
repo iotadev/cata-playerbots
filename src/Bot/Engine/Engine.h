@@ -46,6 +46,8 @@ public:
     Engine& operator=(Engine const&) = delete;
 
     void Init();
+    void Activate();
+    void CancelPendingActions() { queue.Clear(); lastAction.clear(); }
     void AddStrategy(std::string const& name);
     bool RemoveStrategy(std::string const& name);
     bool HasStrategy(std::string const& name) const;
@@ -53,6 +55,7 @@ public:
     std::vector<std::string> GetStrategies() const;
     uint32_t GetStrategyTypeMask() const { return strategyTypeMask; }
     bool HasTargetExclusions() const { return hasTargetExclusions; }
+    GuidSet GatherTargetExclusions(TargetValueExclusionType type) const;
 
     bool Tick(bool minimal = false, bool forceRebuffPending = false, bool inCombat = false,
               uint32_t iterationsPerTick = 10);

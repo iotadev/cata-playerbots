@@ -29,6 +29,11 @@ Playerbots.MultiBot.Enabled = 0
 
 Playerbots.Dev.Enabled = 0
 
+# Console-only disposable level-20 role fixture preparation. Only configured
+# slots; native map-thread talents/equipment/items, no population or DB edits.
+# Never enable on a production realm. See the matching core's party fixture.
+Playerbots.Dev.Fixture20.Enabled = 0
+
 #
 #    Playerbots.Dev.GreetingOnJoin
 #        Description: Have an admitted Playerbot whisper a short greeting when
@@ -52,6 +57,34 @@ Playerbots.Dev.EngineWarriorBuff = 0
 # are unchanged. No new spells, armor preference or autonomous behavior.
 # Default: 0 (existing upkeep). Restart to compare paths reliably.
 Playerbots.Dev.EnginePartyBuff = 0
+
+# Optional donor-shaped carried food/drink recovery for supported companion classes.
+# Uses native item use; no item creation, cheats, purchases or population automation.
+# Starts below 40% health / 20% mana, pauses follow, resumes on completion/interruption.
+# Default-off pending the next bundled mixed-party client check.
+Playerbots.Rest.Enabled = 0
+
+# Optional spec-aware Mage self-armor upkeep through the existing engine.
+# Arcane prefers Mage Armor; other/unspecialized bots prefer Molten Armor.
+# Falls back to learned Mage/Frost Armor; never grants an unlearned spell.
+# Default-off pending the next bundled mixed-party client check.
+Playerbots.Mage.Armor.Enabled = 0
+
+# Temporary native auto-pass policy until equipment-aware donor roll evaluation
+# is ported. Applies to new Group Loot / Need Before Greed rolls, not existing rolls.
+# Does not loot corpses, award items or change another player's preference.
+# Disabling restores each companion's preference from before this feature enabled.
+# Default-off pending a bundled party loot check.
+Playerbots.Loot.PassOnGroupLoot = 0
+
+# Initial nearby-corpse looting through native permissions, money and item storage.
+# Keeps up to eight defeated/selected corpse GUIDs, expiring after 60 seconds.
+# Short native-pathfinding detours: at most 15 yards from bot / 20 from owner,
+# with a ten-second timeout. No area scans or roaming to distant loot.
+# Currency, gathering, skinning and equipment-aware loot policies are not included.
+# Native inventory failures use bounded 30-second per-corpse attempt backoff.
+# Default-off pending the bundled mixed-party loot/recovery check.
+Playerbots.Loot.Corpses.Enabled = 0
 
 #
 #    Playerbots.Dev.EngineWarriorCombat
@@ -82,6 +115,9 @@ Playerbots.Dev.EngineMageCombat = 0
 #                     Shield, Flash Heal, Heal and Renew spell set. Also enables
 #                     out-of-combat Priest Resurrection for nearby dead party
 #                     members and party-bot acceptance of resurrection offers.
+#                     Includes disease cures and conservative healer damage:
+#                     Shadow Word: Pain, Holy Fire, Smite and Mind Blast.
+#                     controller fighting, nearby party health >=90%, mana >=85%.
 #                     Does not enable a complete talent rotation.
 #                     Restart to compare paths reliably.
 #        Default:     0 - (Existing companion Priest healing)

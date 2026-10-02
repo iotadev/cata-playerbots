@@ -4,6 +4,7 @@
  * Released under GNU GPL v2 or any later version.
  */
 #include "Engine.h"
+#include "../PlayerbotAI.h"
 #include "Timer.h"
 #include <algorithm>
 #include <unordered_map>
@@ -35,11 +36,20 @@ bool Engine::ListenAndExecute(Action* action, Event event)
 }
 
 Engine::Engine(PlayerbotAI* botAI, AiObjectContext& context, uint32_t expiryMs)
-    : PlayerbotAIAware(botAI), context(context), queue(expiryMs) { }
+    : PlayerbotAIAware(botAI), context(context), queue(expiryMs)
+{
+    if (botAI) botAI->SetDecisionEngine(this);
+}
 
 Engine::~Engine()
 {
     Reset();
+    if (botAI && botAI->GetDecisionEngine() == this) botAI->SetDecisionEngine(nullptr);
+}
+
+void Engine::Activate()
+{
+    if (botAI) botAI->SetDecisionEngine(this);
 }
 
 void Engine::Reset()
@@ -93,6 +103,19 @@ bool Engine::RemoveStrategy(std::string const& name)
 bool Engine::HasStrategy(std::string const& name) const
 {
     return strategies.find(name) != strategies.end();
+}
+
+// Donor TargetValue::GatherStrategyTargetExclusions, scoped to this active engine.
+GuidSet Engine::GatherTargetExclusions(TargetValueExclusionType type) const
+{
+    GuidSet exclusions;
+    if (type == TargetValueExclusionType::None || !hasTargetExclusions) return exclusions;
+    for (auto const& [name, strategy] : strategies)
+    {
+        (void)name;
+        strategy->AppendTargetExclusions(exclusions, type);
+    }
+    return exclusions;
 }
 
 bool Engine::ContainsStrategy(StrategyType type) const

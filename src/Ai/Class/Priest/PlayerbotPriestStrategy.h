@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <vector>
+#include "../../Base/PlayerbotPartySupport.h"
 
 class Player;
 
@@ -29,9 +30,13 @@ inline HealTier TierForHealth(float healthPct)
     return HealTier::None;
 }
 
+template <typename Candidate, typename Health, typename Attempt>
+bool TryInPriorityOrder(std::vector<Candidate>& candidates, Health&& health, Attempt&& attempt)
+{
+    return PlayerbotPartySupport::TryInPriorityOrder(candidates, health, attempt);
+}
 // Candidates are already checked for life, map, range and line of sight.
-// Failed casts must not starve the rest of the injured party. Stable ordering
-// preserves the caller's tie preference, and one successful cast ends the pass.
+// This health filter belongs only to healing, never other party support.
 template <typename Candidate, typename Health, typename Attempt>
 bool TryInHealthOrder(std::vector<Candidate>& candidates, Health&& health, Attempt&& attempt)
 {
@@ -40,14 +45,7 @@ bool TryInHealthOrder(std::vector<Candidate>& candidates, Health&& health, Attem
         float pct = health(candidate);
         return !(pct > 0.0f && pct < 90.0f);
     });
-    std::stable_sort(candidates.begin(), candidates.end(), [&](Candidate const& left, Candidate const& right)
-    {
-        return health(left) < health(right);
-    });
-    for (Candidate const& candidate : candidates)
-        if (attempt(candidate))
-            return true;
-    return false;
+    return TryInPriorityOrder(candidates, health, attempt);
 }
 
 void LogKnownAbilities(Player const& bot);

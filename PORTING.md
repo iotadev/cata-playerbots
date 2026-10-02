@@ -1,5 +1,58 @@
 # Port provenance and remaining work
 
+## Shared decision states — 2026-10-02
+
+Audited upstream master at `037c01418b5d01506917a3db9b44fd56ac5f965c`:
+`src/Bot/PlayerbotAI.cpp` engine construction/ChangeEngine and
+`src/Bot/Factory/AiFactory.cpp` combat/noncombat/dead factory registrations.
+Compared against previous `7bae1b5c58c76a0aa20381155edc08096d1485b2`; the newer
+AI changes do not alter this pattern. Existing spell/action imports retain
+their own pinned provenance, not a retroactive master label.
+
+`StateEngines` adapts the separate-engine ownership and active-engine switch to
+the existing shared Cata context. State queues/strategy sets are separate.
+The map-thread bridge selects native death, native combat/authorized engagement
+or noncombat. State switches clear pending prerequisites/continuers in all
+engines; steady-state selection preserves them. Stop/movement/target changes
+clear pending work without requiring native combat flags to drain first.
+Transfers suspend ticks and invalidate pending work. Spec refresh affects only
+combat registrations. Priest support remains registered in both live states.
+
+The dead engine is intentionally empty: native resurrection and follow recovery
+retain the existing session ownership. Donor ghost travel, automatic graveyard
+release and autonomous lifecycle behavior are not claimed. No database schema,
+thread scheduler or production fixture-grant interface was added.
+
+Windows worldserver/tests-common built and passed 195 registered checks.
+Linux GCC 11 regenerated, built both targets and ran 195 Catch cases: 194 passed, one failed
+as expected, no unexpected failures. This closes the prior outstanding Linux
+curse/Spellsteal compile validation. Real queue/state regression tests passed;
+native client transition wiring and role-qualified gameplay remain pending.
+See the matching core's shared-state acceptance and repeatable party fixture.
+
+### Native disposable fixture
+
+Added default-off `Playerbots.Dev.Fixture20.Enabled` and a console-only
+configured-slot `fixture20` request. A bounded GUID/role mailbox is consumed
+on the existing map update; no Player pointer or new core scheduling seam is
+introduced. Native LearnPrimaryTalentSpecialization/LearnTalent select the
+level-20 Protection/Arms/Frost/Holy roles and spend only available points.
+Native spell/inventory checks grant explicit test skills, preserve old equipped
+items in bags, equip modest verified items and top up food/water. Completion
+is separate from command acceptance and SaveToDB requests are not DB commit proof.
+The tool rejects wrong class/tree/level, grouped, dead, combat or transfer states.
+This is test scaffolding, not donor production character/equipment progression.
+The existing harness can prepare/save/stop the fixture without a client.
+
+Server-only preparation passed on 2026-10-02. The four native primary trees were
+845/746/823/813 with zero free talent points. After native logout the harness
+verified saved talent records, level, equipped weapons and Protection shield,
+plus carried food/water. World/auth/database shut down cleanly. The stopped
+copy is retained only as ignored local fixture data. Client combat/transition
+acceptance is deferred by the user; the milestone candidate is not full gameplay
+acceptance. The fixture audit caught absent legacy spell 168; it was removed.
+Native Cata armor records start above this fixture's level and await later tests.
+
 ## Reading this history
 
 Entries below record evidence at their dated revisions, newest first. Older
@@ -10,6 +63,673 @@ checklist for current scope. Windows build/tests and the server-only factory
 batch have passed. Ordinary-player addon lifecycle also passed the bundled
 check below. Linux build and automated tests passed as recorded here; Linux
 runtime remains unverified. No full donor feature parity is claimed.
+
+## Mage current-target Spellsteal - 2026-10-02, development
+
+Adapt donor GenericMageStrategy spellsteal priority 40 and Mage SpellstealTrigger
+at `7bae1b5c58c76a0aa20381155edc08096d1485b2`. Cata learned spell 30449 has
+native steal-beneficial-buff effect 126, magic type 1 and learn level 70. The
+current validated hostile Creature supplies native dispellable magic candidates;
+exclude CANNOT_BE_STOLEN in addition to the native passive/polarity/resistance/
+charge filters. Trigger and action recheck eligibility, retaining no aura pointer.
+Native Spellsteal owns random selection, resistance, removal/transfer, charges,
+duration and cost. Existing controlled targeting, facing/LOS/range and conservative
+single-target threat guard remain. No enemy search, PvP routing, general purge,
+manual aura transfer or new permission. Two policy tests added; Windows
+worldserver/tests-common built and all 192 CTest cases passed. Core/module diff
+checks passed. Docker still returns an internal API error; current Linux validation is
+unavailable, including the previous curse slice. See research/SPELLSTEAL_PACKET.md.
+Native buff transfer remains unverified.
+
+## Mage curse utility and shared party support - 2026-10-01, development
+
+Adapt donor MageCureStrategy and RemoveCurseTrigger/PartyMemberRemoveCurseTrigger
+at `7bae1b5c58c76a0aa20381155edc08096d1485b2`: self/party Remove Curse at 41/40.
+Cata spell 475 is a native curse dispel learned at level 30. Existing Priest
+candidate gathering/unfiltered stable ordering now live in shared party support;
+Priest wrappers retain their class/healing filters and native disease behavior.
+Shared native dispel eligibility verifies the requested spell's dispel effect
+type before consulting GetDispellableAuraList. No retained aura pointers or
+manual removal. Mage cures require its existing default-off combat-engine flag,
+an alive nearby controller, learned spell and native eligible friendly player.
+Rest/loot/transfer/mounted/casting work defers cures. Register independent cure
+strategy in both combat/noncombat states and reuse the existing passive timer
+for enabled Mages; no new timer, scheduler, lifecycle or database seam. Other
+class passive-tick gating remains unchanged. Three new policy/strategy tests;
+Windows worldserver/tests-common built and all 190 CTest cases passed, including
+existing Priest regressions. Core/module diff checks passed. Linux build was
+started, but Docker's API returned an internal error during status inspection;
+completion cannot currently be confirmed. Do not infer Linux validation from
+the preceding 187-case batch. See research/MAGE_CURSE_PACKET.md. Native
+curse removal and resistance/protection cases remain runtime-unverified.
+
+## Mage defensive support - 2026-10-01, development
+
+Adapt donor GenericMageStrategy.cpp and FrostMageStrategy.cpp at
+`7bae1b5c58c76a0aa20381155edc08096d1485b2`: Ice Block 90 below 25 percent,
+Mana Shield 85 below 45 percent, Frost Ice Barrier 29 below 65 percent or
+attacked by the current enemy. These are donor default thresholds, not a port
+of its configurable health values. Actions recheck learned spells/current aura
+and native exclusion metadata (Ice Block Hypothermia), then request native self
+casts. Self-defense is not enemy-facing/LOS gated, but remains in the existing
+controlled combat/session path. No own-cast cancellation, Blink, early Ice Block
+removal, aura injection or absorb/cost duplication. Native glyph/talent side
+effects remain native, including reactive area effects; no new offensive AoE
+strategy is added. Three policy tests added. Linux worldserver/tests-common
+built successfully; 187 cases completed with 186 passed and the existing
+expected failure. Windows worldserver/tests-common built and all 187 CTest
+cases passed. Core/module diff checks passed.
+See research/MAGE_DEFENSIVE_PACKET.md. Native effects remain runtime-unverified.
+
+## Frost proc follow-up - 2026-10-01, development
+
+Adapt donor FrostMageStrategy.cpp at
+`7bae1b5c58c76a0aa20381155edc08096d1485b2`: Brain Freeze -> Frostfire Bolt and
+frozen/Fingers of Frost eligibility -> Deep Freeze. Cata aura 57761 effect 1
+must affect learned Frostfire Bolt 44614 and fully reduce cast time. Deep Freeze
+44572 reads its native frozen target requirement through HasAuraState, including
+affecting native ignore-state effects. No manual proc removal or damage/stun.
+Priorities 23/22 preserve donor Brain Freeze-before-Deep Freeze order while
+placing both above the existing Ice Lance priority 21. Native casting owns
+cooldown failure/fallback and spell_mage_deep_freeze's immune-target damage.
+No pet, new AoE, movement, pull or lifecycle changes. See the matching core's
+research/FROST_PROC_PACKET.md. Two policy tests added. Linux worldserver and
+tests-common built successfully; its 184-case suite completed with 183 passed
+and the existing expected failure. Windows worldserver/tests-common also built,
+and all 184 CTest cases passed. Core/module diff checks passed.
+Native proc consumption and immune-target behavior remain runtime-unverified.
+
+## Fire proc and native override support - 2026-10-01, development
+
+Adapt donor FireMageStrategy hot streak -> Pyroblast (25) and improved scorch
+-> Scorch (19) at `7bae1b5c58c76a0aa20381155edc08096d1485b2`. Native Hot Streak
+48108 overrides learned base 11366 to 92315; shared TryCast authorizes the base
+then follows Unit::GetCastSpellInfo and its native cost flags before ordinary
+cast validation. No forced replacement, GCD waiver or proc removal. Scorch
+requires an active Critical Mass applier and matching loaded native proc metadata;
+missing/mismatched metadata fails closed. Do not infer proc correctness from raw
+DBC masks or policy tests. Living Bomb is deferred because its expiry explosion
+needs AoE safety. See research/FIRE_PROC_OVERRIDE_PACKET.md in the matching core.
+Windows/Linux built worldserver/tests-common with the final proc-metadata check.
+Windows passed all 182 CTest cases; Linux completed its 182-case suite
+successfully (181 passed plus the existing expected failure). Native behavior
+and loaded Scorch proc-data correctness remain unverified.
+
+## Fire/Arcane starter routes and Arcane actions - 2026-10-01, development
+
+Adapted donor FireMageStrategy.cpp / ArcaneMageStrategy.cpp at
+`7bae1b5c58c76a0aa20381155edc08096d1485b2`: named `fire` and `arcane` siblings,
+donor starter default order, Arcane Blast/Missiles/Barrage, and stack-cap Missiles
+priority 15. Cata Missiles requires native aura 79808; read CasterAuraSpell and
+Arcane Blast 36032's cap from SpellInfo. Existing single-target threat and
+cast/channel validators remain; native casting owns mana/stacks/procs. Shared
+native spec refresh replaces the old Mage/Frost split and preserves the generic
+unassigned route. Fire DoTs/Hot Streak, mana phases, AoE and full movement parity
+are deferred. Hot Streak specifically needs native action-bar override resolution;
+do not force its replacement spell. See core research/MAGE_SPEC_ACTION_PACKET.md.
+Windows/Linux built worldserver/tests-common. Windows passed all 180 CTest
+cases; Linux completed its 180-case suite successfully (179 passed plus the
+existing expected failure). Native Arcane behavior is unverified.
+
+## Native Cata Warrior additions - 2026-10-01, development
+
+Add Colossus Smash 86346 to Arms/Fury and Enrage-gated Raging Blow 85288 to
+Fury through the existing donor strategy/action surfaces. These are explicit
+Cata adaptations, not unchanged donor actions. Priorities 28/26 place them
+below stance support and around the existing primary/proc attacks. Own Colossus
+Smash aura prevents clipping; native SpellInfo/HasAuraState supplies Raging
+Blow eligibility. Native spell_warr_sudden_death owns the Colossus cooldown
+reset, replacing the donor Wrath Execute-proc assumption. No manual reset,
+armor/weapon-hit duplication or above-20% Execute route. Source-checked against
+matching Cata scripts/DBC and donor `7bae1b5c58c76a0aa20381155edc08096d1485b2`.
+See core research/WARRIOR_CATA_ACTION_PACKET.md. Windows and Linux built
+worldserver/tests-common. Windows passed all 178 CTest cases; Linux completed
+its 178-case suite successfully (177 passed plus the existing expected failure).
+Native behavior remains unverified.
+
+## Warrior proc response - 2026-10-01, development
+
+Adapted donor ArmsWarriorStrategy.cpp / FuryWarriorStrategy.cpp and trigger
+registrations at `7bae1b5c58c76a0aa20381155edc08096d1485b2`. Arms responds to
+target-bound native dodge reactions or affecting Taste for Blood (60503) with
+Overpower (7384) at donor relevance 24. Fury responds to Bloodsurge (46916)
+with Slam (1464) at relevance 25, checking the native casting-time operation,
+spell mask and full reduction. No unprocced Slam filler or forced instant cast.
+Existing controlled melee actions repeat eligibility at execution; native
+casting owns proc consumption, damage, rage and final calculated cast time.
+See matching core research/WARRIOR_PROC_PACKET.md. Windows and Linux built
+worldserver/tests-common. Windows passed all 176 CTest cases; Linux completed
+its 176-case suite successfully (175 passed plus the existing expected failure).
+Native proc behavior is not client-confirmed.
+
+## Arms and Fury starter strategies - 2026-10-01, development
+
+Adapted donor ArmsWarriorStrategy.cpp / FuryWarriorStrategy.cpp and native
+spec selection at `7bae1b5c58c76a0aa20381155edc08096d1485b2`. Add sibling
+`arms` and `fury` strategies: Mortal Strike, Bloodthirst, sub-20% Execute and
+the corresponding native Battle/Berserker stance. Preserve donor relevance;
+Strike remains the starter fallback. Shared native-primary-tree routing now
+replaces the session's old generic-DPS/tank split via existing spec refresh.
+Support validators take an explicit required tree; Protection defenses remain
+Protection-only. Native costs, damage, healing, cooldowns, stance and rage
+consumption are unchanged. No AoE, proc-heavy rotation or full spec parity is
+claimed. See matching core research/WARRIOR_DPS_SPEC_PACKET.md.
+Windows and Linux built worldserver/tests-common. Windows passed all 174 CTest
+cases; Linux completed its 174-case suite successfully (173 passed plus the
+existing expected failure). Native behavior is not client-confirmed.
+
+## Protection stance and defensive support - 2026-10-01, development
+
+Adapted donor TankWarriorStrategy.cpp, WarriorActions.h and HealthTriggers.h at
+`7bae1b5c58c76a0aa20381155edc08096d1485b2`: Defensive Stance, Shield Block,
+Shield Wall below 45% health and Last Stand below 25%, preserving donor
+priorities and strict health boundaries. Existing Warrior action/trigger classes
+now have an explicit self-target mode; hostile actions retain their validators.
+Self support stays inside an existing routed Protection fight, without requiring
+facing/melee reach. Native casting owns stance, shield, cost, proc and cooldown
+requirements. No idle stance manager or emergency tick outside existing combat
+routing. Health triggers use Warrior-specific names to avoid the rest trigger
+collision. See core research/WARRIOR_DEFENSIVE_PACKET.md.
+Windows and Linux built worldserver/tests-common with the final triggered-aura
+correction. Windows passed all 173 CTest cases; Linux's 173-case suite completed
+successfully (172 passed plus the existing expected failure). Native behavior
+is not client-confirmed.
+
+## Warrior tank rotation slice - 2026-10-01, development
+
+Adapted donor TankWarriorStrategy.cpp / WarriorActions.h/.cpp at
+`7bae1b5c58c76a0aa20381155edc08096d1485b2`: Devastate filler, Revenge,
+Sunder Armor refresh/fallback and Sword and Board -> Shield Slam. Cata native
+SpellInfo supplies the three-stack Sunder debuff (58567) cap and Revenge reactive state;
+native scripts own Sunder application and Shield Slam cooldown reset.
+Existing Protection strategy, default-off combat flag and controlled melee
+target boundary remain. Shield Slam default 5.4 precedes donor Devastate 5.3;
+explicit Sunder candidate replaces the donor ActionNode alternative. See the
+matching core `doc/local/playerbots/research/WARRIOR_TANK_ROTATION_PACKET.md`.
+Windows and Linux worldserver/tests-common built. Windows CTest passed all 172
+registered tests; Linux's 172-case suite completed successfully (171 passed and
+the existing expected-failure case). Native tank behavior remains untested.
+
+## Warrior fallback correction from bundled test - 2026-10-01, development
+
+The bundled outdoor session recorded Mage Fireball/Fire Blast/Molten Armor,
+Priest Smite/Renew/Heal, Warrior Strike and native corpse opening by all four
+bots. It also recorded repeated distance-leash disengages. The player reported
+Warriors failing to resume on a later pull; logs showed their initial engagement,
+then leash disengagement. Both saved Warrior primary talent trees were unassigned.
+The initial fallback port admitted only Protection Warriors, leaving this role
+dependent on selected-target assist while casters could resume independently.
+
+All enabled Warriors now use the named fallback: Protection uses tank target,
+unassigned/Arms/Fury use the donor general DPS selector. Mage/Priest routing is
+unchanged. Melee DPS ranking uses native melee reach rather than the caster
+range band. A pure routing regression checks every implemented route, disabled
+gates and unsupported classes. Windows and Linux worldserver/tests-common each
+built and passed all 171 tests after the explicit native enum include correction.
+This does not fix or
+relax the distance leash, switch active fights or qualify runtime recovery.
+The completed test used the original binary copy; correction is not live-tested.
+
+## Named combat targets and Protection tank fallback - 2026-10-01, development
+
+Adapted active TankTargetValue smart ranking from donor
+7bae1b5c58c76a0aa20381155edc08096d1485b2: lost aggro, owned melee, owned distant;
+distance ties for lost aggro and lower own threat otherwise. Only Protection
+Warriors qualify. Icon priority recognizes current non-tank roles without
+guessing unported roles or another tank bot's rti. Explicit-main-tank preference,
+taunts, threat writes and the inactive old selector are not ported.
+
+Shared `dps target` / `tank target` return fresh GUIDs through a borrowed const
+engine accessor, bound/cleared by Engine lifetime. Session ownership destroys
+engine before context/AI. Idle Protection fallback requires EngineWarriorCombat;
+Mage/Priest keep their gates. Selected targets, explicit commands and active
+attacks retain precedence. No new core seam, SQL or retained Unit pointers.
+Three pure tests were added; Windows and Linux worldserver/tests-common each
+built and passed all 170 tests, including the final role-filter recheck. See matching
+core research/TANK_TARGET_PACKET.md for native verification gaps.
+
+## Controlled-party DPS fallback - 2026-10-01, development
+
+Adapted TargetValue exclusion/priority gathering, DpsTargetValue caster/general
+ranking and RtiValue icon defaults from donor
+7bae1b5c58c76a0aa20381155edc08096d1485b2. Strategy exclusion hooks were already
+imported; Engine now gathers fresh typed exclusions from active providers.
+Shared manual `prioritized targets`, `rti` (skull) and `rti cc` (moon) values
+register in current class contexts. No new command, persistence or addon claim.
+
+The native map adapter returns a GUID, applying exclusions, CC markers and
+native validity/leash checks only to already-controller-engaged creatures.
+Explicit raid icon precedes donor caster/general ranking. Unknown DPS uses
+general health/distance ordering instead of unsafe division. Living-near-member
+count and the existing 25-yard eligibility are conservative Cata boundaries;
+the 30-yard ranking boundary is not the donor configurable default (33.5).
+
+Mage/Priest auto-assist uses this only when idle with no valid selected combat
+target, under existing default-off engine gates. Explicit commands and valid
+selected targets retain precedence; active fights and Warrior selection are
+unchanged. No retained Unit pointers, second target owner or SQL. The matching
+core adds only a bounds-checked read-only Group::GetTargetIcon accessor; native
+marker writes and persistence are unchanged.
+This is not complete named DPS target value parity, dynamic switching or
+autonomous target permission. Encounter-specific exclusion providers remain ahead.
+
+Four pure ranking tests and one active Engine exclusion test were added.
+Windows and Linux worldserver/tests-common built and each passed all 167 tests;
+native selection/gameplay remains bundled.
+See the matching core's research/DPS_TARGET_PACKET.md for adaptations and gaps.
+
+## Engaged attackers and healer balance - 2026-10-01, development
+
+Adapted AttackersValue, BalancePercentValue in AttackerCountValues and
+HealerShouldAttackTrigger from donor 7bae1b5c58c76a0aa20381155edc08096d1485b2.
+Shared `attackers` reads native PvE threatened-by-me references for self and
+nearby living same-map group members, retains deduplicated GUIDs and applies
+native target/claim checks. It never changes the controlled target. Priority/
+skull/duel/arena candidates and independent pet contributors are not ported.
+
+Shared `balance` keeps donor creature-rank weights, roster denominator,
+ten-member cap and 0–200 ratio. The numerator uses only living in-world
+same-map members, not cross-map lookup. Both values recompute on Get rather
+than reusing the donor one-second attacker cache; no retained Unit pointers.
+Priest scheduled damage now uses donor-default balance mana thresholds
+85/65/40, preserving existing 90% healing priority and controller/command gates.
+No solo bypass, new settings, SQL, native threat mutation or core seam.
+
+Three pure policy regressions were added; Windows and Linux worldserver/
+tests-common built and each passed all 162 tests.
+Native traversal/filtering is source-reviewed, not gameplay-tested. This is a
+level/rank heuristic, not full target selection or measured encounter balance.
+See the matching core's research/COMBAT_BALANCE_PACKET.md for adaptations/gaps.
+
+## Single-target caster threat - 2026-10-01, development
+
+Adapted ThreatValues / ThreatStrategy from donor
+7bae1b5c58c76a0aa20381155edc08096d1485b2. Shared `threat` and reset-on-read
+`neglect threat` values use native read-only current-target threat. Tanks are
+living same-map group Protection Warriors, including humans; other tank roles
+are not guessed. Without a recognized tank, damage remains allowed.
+The Mage/Priest scheduled engines veto Single damage at the donor 80% threshold;
+healing, buffs, cures and interrupts remain unaffected. Existing gates stay
+default-off. No core seam, thread, SQL or new configuration.
+
+The ratio explicitly guards zero division, saturates before uint8 conversion
+and defers on non-finite input, rather than retaining donor arithmetic hazards.
+Startup/fleeing and the one-shot bypass retain donor policy. AoE qualifiers,
+FocusStrategy, Warrior auto-attacks and direct ExecuteAction interception are
+not ported. No complete tank/threat-management parity is claimed.
+
+Four pure policy/value tests and one Engine scheduling regression were added.
+Windows and Linux worldserver/tests-common built and each passed all 159 tests.
+Native reads/wiring are source-reviewed, not gameplay-tested.
+See the matching core's research/THREAT_ENGINE_PACKET.md for scope and follow-up.
+
+## Shared combat estimate values - 2026-10-01, development
+
+Ported EstimatedGroupDpsValue / the current-target subset of EstimatedLifetimeValue
+and mixed-gear helpers from donor 7bae1b5c58c76a0aa20381155edc08096d1485b2.
+Named values register in all three implemented class contexts. The existing
+map thread reads native alive/same-map server-origin group bots, carried usable
+gear and current role. Human players are excluded. Float-only DPS caching keeps
+the donor 20-second interval; group identity/map/bot-level changes invalidate it.
+The borrowed AiObjectContext accessor binds/clears with existing context ownership.
+No retained Player/Item pointers, equipment mutations, thread or native core seam.
+
+Donor level/gear curves, role weights, quality scaling, best-slot/top-twelve gear
+aggregation and party/raid bonuses are retained. Cata robe and holdable mappings
+are included. Only supported bot roles/levels 1–80 are modelled; 81–85 is unavailable,
+not extrapolated. Unknown estimates return zero; the single-target lifetime value
+does not implement arbitrary target qualifiers or the donor multi-attacker penalty.
+Shadow Word: Pain now requires its donor eight-second health/DPS gate at execution;
+unknown estimates skip the DoT while leaving other spells available. This is an
+estimate, not measured damage or complete Cata role/profile parity.
+
+Seven new pure tests cover curves/gear/roles/group bonuses/slots/lifetime policy.
+Windows and Linux worldserver/tests-common built and each passed all 154 tests.
+Native traversal, filtering and cache/context
+ownership are source-reviewed; accuracy and gameplay remain bundled checks.
+
+## Priest healer damage actions - 2026-10-01, development
+
+Extended the same donor PriestHealerDpsStrategy at
+7bae1b5c58c76a0aa20381155edc08096d1485b2 with Shadow Word: Pain (5.5), Holy
+Fire (5.4), existing Smite (5.3) and Mind Blast (5.2). One spell table supplies
+strategy wiring and action registration; each action rechecks its own learned
+spell and the existing healing/mana/target gates. The common trigger is no
+longer dependent on knowing Smite. No session, movement, core or SQL change.
+
+Native Cata DBC rows confirm Priest class mask 16 for 589 (level 4, periodic
+damage), 14914 (level 18, direct/periodic damage) and 8092 (level 9, direct damage).
+Periodic actions check only their caster-owned native aura and do not reapply
+while it remains. This follows donor owner-aware aura checks; no manual effects.
+Holy Fire's donor minimum lifetime is zero. Shadow Word: Pain's eight-second
+estimated-lifetime gate requires an unported group-DPS value and is explicitly
+deferred; short-lived-target efficiency is not equivalent to the donor.
+
+The wiring regression now checks all four donor priorities; two new tests check
+the Cata identities and periodic-aura policy. Windows and Linux built
+worldserver/tests-common and each passed all 147 tests. Gameplay remains part
+of the existing bundled check. No wand shooting,
+AoE, Shadow rotation, balance values or estimated-lifetime substitute added.
+
+## Priest healer DPS - 2026-10-01, development
+
+Adapted PriestHealerDpsStrategy / HealerShouldAttackTrigger from donor
+7bae1b5c58c76a0aa20381155edc08096d1485b2. The `healer dps` strategy wires
+`healer should attack` to real Smite at 5.3, below heal/cure priorities. Native
+Cata DBC confirms spell 585, level 1, Priest mask 16 and school-damage effect 2.
+The existing EnginePriestHeal gate remains default-off; no learning or SQL seam.
+
+The map adapter's existing GUID target and assist flag own stationary Priest
+support, without melee Attack or MoveChase. Commands/target invalidation precede
+the same 750-ms healing tick; ending support restores idle formation follow.
+Damage requires the controller fighting a native-valid nearby creature,
+eligible healing candidates at >=90% health and mana >=85%. Trigger/action both
+recheck. Donor balance is not ported: this explicitly uses its conservative mana
+branch, without the solo bypass. Explicit attack cannot start a Priest-only pull.
+
+Four new tests cover donor wiring, eligibility/mana, healing/target changes and
+engine-queued damage yielding to changed eligibility. Windows and Linux built
+and each passed 145 tests. Control/movement is source-reviewed;
+damage, healing responsiveness and follow resumption remain for a bundled live
+check. No own-cast cancellation, full Shadow rotation, AoE or balance parity.
+
+## Party-cure healthy-target correction - 2026-10-01, development
+
+Source review for the next healer-DPS slice caught a Cata adaptation error in
+the disease port below: its reused TryInHealthOrder erased candidates at 90
+percent health or above. Healthy players can still have dispellable diseases.
+Ordering is now a separate TryInPriorityOrder helper; healing keeps its original
+health filter, while cure target detection/execution use the unfiltered order.
+Native life/map/range/LOS/disease checks remain unchanged.
+
+Three added regressions retain healthy/full-health members, preserve stable
+health ties and rejected-cast fallback, and handle empty cure lists. Existing
+healing regressions still enforce the old healing-only cutoff. Windows and Linux
+built and each passed all 141 tests. This fixes selection,
+not proof of native aura removal. The next healer-DPS packet is mapped but not
+implemented; Priest offensive target/control ownership must be completed first.
+
+## Priest disease cure - 2026-10-01, development
+
+Ports the disease subset of donor PriestCureStrategy, CureDiseaseTrigger and
+PartyMemberCureDiseaseTrigger plus CurePriestStrategyActionNodeFactory's real
+Cure fallback at 7bae1b5c58c76a0aa20381155edc08096d1485b2. Cata DBC inspection
+confirmed Cure Disease 528, class mask 16, level 22, effect 38/dispel type 3;
+Wrath Abolish Disease 552 is absent. The `cure` strategy therefore wires
+`cure disease` / `party member cure disease` directly to `cure disease` /
+`cure disease on party`, preserving donor priorities 31/30 without a dummy
+Abolish creator.
+
+The existing Priest engine/candidate helper owns self/controller/group targeting.
+Party cures exclude self and try eligible members in health order; a native
+cast rejection on one member does not starve the others. Triggers and actions
+ask native GetDispellableAuraList for disease eligibility, preserving polarity,
+passive/zero-charge/100-percent-resistance rejection and Unholy Blight protection.
+Aura pointers stay inside the current call; native TryCast/EffectDispel owns
+actual aura removal, resistance and resource effects.
+
+Existing EnginePriestHeal gates execution. Cure defers during rest or queued/
+pursued loot. Critical healing priorities remain higher. Magic/poison/curse
+dispels, enemy purge, talent dispel changes and AoE cure are not included.
+No new config key, scheduler, core seam or database change is added.
+Three pure tests cover names/priorities and enabled/alive/learned/native-allow
+policy. Windows and Linux worldserver/tests-common builds each passed all 138
+tests; native disease removal and protection/
+resistance behavior remain unverified in game.
+
+## Heroic Strike and conditional Frost Ice Lance - 2026-10-01, development
+
+Adapts donor FuryWarriorStrategy/TankWarriorStrategy rage triggers,
+GenericTriggers::RageAvailable, FrostMageStrategy's Ice Lance default and
+CastIceLanceAction at 7bae1b5c58c76a0aa20381155edc08096d1485b2. Generic Warrior
+uses `medium rage available` (40 displayed rage), ACTION_DEFAULT + 0.1;
+Protection uses `high rage available` (60 rage), ACTION_HIGH. Native Cata power
+stores rage in tenths, so reserves are 400/600. The action rechecks the current
+primary tree and learned spell before using existing native TryCast.
+
+Read-only Cata DBC checks confirmed Heroic Strike 78, class mask 1, level 14;
+Ice Lance 30455, mask 128, level 28. Fingers of Frost proc 44544 applies aura
+type 262. Frost Mage uses the native Mage aura-state override and frozen-target
+checks from Unit.cpp's Ice Lance damage path. Native casting/damage owns proc
+consumption, rage spending and effects; none are set manually.
+
+Frost retains Ice Lance's default slot at 5.3 and adds frozen/proc priority 21.
+The action requires current frozen/proc eligibility, rejecting expired states.
+This conditional usefulness/priority is an explicit Cata adaptation: donor
+Wrath's Fingers of Frost trigger favors Deep Freeze/Frostbolt, and its default
+Ice Lance permits movement filling. Unrestricted movement filling, Deep Freeze,
+pet/proc rotations and Generic Mage changes are not part of this port.
+
+Both actions use existing default-off combat-engine gates and existing class
+contexts. No AoE scan, spell grant, talents, config/database/core changes or
+new scheduler. Three pure regressions cover rage boundaries/reserves, known-spell
+gates and frozen/proc conditions. Windows and Linux worldserver/tests-common
+builds each passed all 135 tests; live resource
+spending, proc consumption and damage remain unverified.
+
+## Current-target interrupts - 2026-10-01, development
+
+Adapts donor InterruptSpellTrigger, Warrior Pummel and Mage Counterspell
+actions at 7bae1b5c58c76a0aa20381155edc08096d1485b2. Implemented Warrior and
+Mage combat strategies register `pummel` / `counterspell` at ACTION_INTERRUPT
+(40), under their existing default-off combat-engine flags. Both use the
+already-selected GUID-based combat target; no enemy-healer scan is added.
+
+Read-only Cata DBC checks confirmed Pummel 6552, learn level 38, class mask 1;
+Counterspell 2139, learn level 9, class mask 128. Both use native interrupt
+effect 68. Only learned spells are attempted. Trigger and action revalidate
+the same preparing-with-cast-time/channeling and native CanBeInterrupted policy
+used by Spell::EffectInterruptCast. Native TryCast still owns range/LOS,
+cooldowns, resources, stance, GCD and spell execution. The module never calls
+InterruptSpell or locks a spell school manually.
+
+The Mage does not cancel its own current cast to interrupt. Cross-bot
+coordination, Priest Silence, healer targeting and movement-to-interrupt remain
+follow-ups. These are bounded current-target actions, not full donor parity.
+Three pure tests cover cast-state/native-allow policy and trigger names/priority.
+Windows and Linux worldserver/tests-common built and each passed all 132 tests
+after refreshing build definitions for new files. Landed interrupts remain unverified.
+
+## Active-spec combat strategy refresh - 2026-10-01, development
+
+Adapts donor AiFactory::AddDefaultCombatStrategies and
+PlayerbotAI::SelectiveResetStrategies at
+7bae1b5c58c76a0aa20381155edc08096d1485b2. The existing single-engine map adapter
+now reselects implemented combat routes from native active primary talent tree
+before ticking: Protection Warrior -> tank, other Warrior -> warrior; Frost
+Mage -> frost, other Mage -> mage. Priest retains the explicit heal fallback.
+This fixes login-only selection, not missing spec rotations or talent spending.
+
+Mage combat siblings now have their own context, matching Warrior, so switching
+does not remove shared buff/rest/loot/armor strategies. Unchanged routes preserve
+the queue. Changed routes use existing AddStrategy/Init to remove the old sibling
+and clear obsolete queued actions. Current native casts are not cancelled.
+No new scheduler, core hook, database or config setting is introduced.
+
+Three pure regressions cover Cata-tree/fallback mapping, sibling/shared strategy
+preservation, and unchanged-queue versus changed-route reset. Windows and Linux
+worldserver/tests-common builds each passed all 129 tests. Live spec transitions remain
+unverified. See the matching core's SPEC_STRATEGY_REFRESH_PACKET.md for scope.
+
+## Bounded corpse collection and movement - 2026-10-01, development
+
+Follow-up to the opening slice below, adapting donor LootObjectStack,
+LootNonCombatStrategy and MovementActions.cpp::MoveToLootAction at
+7bae1b5c58c76a0aa20381155edc08096d1485b2. The `far from loot target` trigger
+and `move to loot` action keep donor relevance 7. Discovery is limited to
+observed defeated targets and eligible controller selection; an eight-entry
+map-owned GUID collection expires entries after 60 seconds and selects the
+nearest currently eligible corpse. It retains no donor Player pointer.
+
+Native pathfinding handles short detours only: corpse within 15 yards of the
+bot and 20 yards of the controller. The existing session movement owner pauses
+follow, cancels for combat/control/transfer/disable/ineligibility, and restores
+formation on completion. One GUID/timestamp bounds pursuit to ten seconds;
+timeout uses the existing per-corpse backoff. Rest/armor defer while pursuing.
+No new scheduler, broad area search, teleport, database or config key is added.
+The opening mailbox and native permissions/storage remain unchanged.
+
+Three pure regressions cover collection capacity/deduplication, expiry/wrap and
+single-pursuit timeout/reuse; strategy coverage includes both donor stages.
+Final Windows and Linux worldserver/tests-common builds passed all 126 tests
+on each platform, including the movement-control guard. Live detour/path-cancellation behavior remains
+unverified and belongs in the next bundled recovery/loot check.
+
+## Nearby corpse opening/storage - 2026-10-01, development
+
+The next bounded slice adapts LootNonCombatStrategy/OpenLootAction/StoreLootAction
+at donor 7bae1b5c58c76a0aa20381155edc08096d1485b2. It retains `loot`, `can loot`
+and `open loot` names and opening relevance 8. The initial strategy deliberately
+omits distant-loot movement, area discovery, gathering and skinning instead of
+registering unimplemented actions. It considers the last defeated combat target,
+or the controller's selected corpse if that target is not nearby. Selection is
+cached for two seconds and considers at most two identities, not a nearby scan.
+
+Playerbots.Loot.Corpses.Enabled defaults off and is cached on load/reload. Actors
+must be alive, out of combat/casting/transfer, unmounted, near a live controller,
+and not actively resting. Candidates must be lootable, within native interaction
+distance/LOS, and assigned to the bot or its group. A bounded eight-entry attempt
+history supplies a 30-second per-corpse backoff, including inventory failures;
+this is not the donor's full cached item-usage/loot-strategy policy. All native
+allowed/owner item slots and coins are attempted; currencies are deferred.
+
+One GUID-only, generation-checked mailbox bridges map-thread engine decisions
+to the existing WorldSession unsafe/world update. It is not another scheduler.
+The world consumer rechecks current follow-controller identity, full-control
+authorization, feature gate, actor/corpse eligibility and absence of an unrelated
+active loot window. No raw player, corpse, loot or packet pointer survives a tick.
+Explicit movement/combat requests, death, transfer or disable cancel pending
+work; stale completion cannot clear a newer request. Follow pause/resume uses
+an explicit receipt flag, including completion before the next map update.
+
+The required native core seam adds an optional typed LootResponse output to
+Player::SendLoot. Ordinary callers keep the default null path. A provided result
+is reset at entry and filled only by the normal permission-checked loot response
+builder; generation, ownership, roll creation and looter registration remain
+native. This avoids reading discarded socketless outbound packets or duplicating
+permission logic. The world consumer uses ordinary native money/autostore
+handlers and release, preserving HandleLootOpcode's post-open cast/aura
+interrupt effects. Only ALLOW_LOOT/OWNER slots are attempted; roll, locked and
+master slots are skipped. No manual money restoration, item awards, loot-GUID
+overwrite, Wrath response decoding or synchronous module SQL is used.
+
+The action's true result means request accepted. PB-LOOT logging means native
+opening accepted, not storage success; inventory failures and awards remain
+native. Four pure tests cover strategy wiring, bounded mailbox lifecycle,
+cancellation/stale completion, follow-resume signaling and backoff/wrap handling.
+Native storage, sharing/rolls, full bags and rest/follow timing still
+require further bundled evidence; earlier 119-test evidence is historical.
+Windows and Linux worldserver/tests-common builds each passed all 123 tests
+after the final interruption guard and test-only GUID link/constructor
+corrections. Linux's completed larger rebuild was followed by an incremental
+current-source check and another full test pass.
+
+The 2026-10-01 outdoor mixed-party check recorded native corpse opening by all
+four bots and 17 accepted Mage offensive casts. The party returned to follow
+after kills, and bot save/logout and server shutdown completed cleanly. Opening
+logs do not prove item awards or roll resolution. No accepted Priest healing
+casts were recorded. Food/water had not been provisioned and the level-20 Mage
+had no armor spell, so rest and armor were not exercised. The reused Warriors
+were level one; the recovery harness now requests native offline level
+normalization before admission. That fixture correction is not runtime-verified.
+
+## Native companion group-loot preference - 2026-10-01, development
+
+Loot source review refreshed upstream master at
+7bae1b5c58c76a0aa20381155edc08096d1485b2 and inspected LootNonCombatStrategy,
+AvailableLootValue/HasAvailableLootValue, LootObjectStack, LootAction and
+LootRollAction. Full corpse looting and item-usage-based rolling are not ported.
+In particular, donor StoreLootAction depends on an outbound loot response that
+server-origin Cata sessions currently discard. No Wrath response layout or
+unsafe map-thread Group vote calls were copied.
+
+The first implementation reuses Cata's native Player pass-on-group-loot preference
+behind Playerbots.Loot.PassOnGroupLoot (default off, cached on load/reload).
+Session-owned state captures/restores the prior preference on enable/disable;
+it holds no Player/Group/Roll pointers. It applies to new rolls, not existing
+pending rolls, and does not collect money/items or evaluate equipment upgrades.
+Ordinary players and other loot methods are not configured by this policy.
+
+A matching native core correction is required: GroupLoot must count its initial
+auto-pass votes exactly once. The follow-loot-rules quest branches in GroupLoot
+and NeedBeforeGreed must also honor/count the native preference. This corrects
+ordinary native opt-out as well, independently of the module flag. Reward
+distance, eligibility, vote resolution and awards remain native. The older
+published core pin lacks this correction; use matching development sources.
+
+Four pure policy tests cover disabled noninterference, snapshot/restore,
+reassertion and reenable. Native roll creation/resolution and all-pass timeout
+behavior remain bundled runtime checks, not proven by these policy tests.
+Windows and Linux worldserver/tests-common builds each passed all 119 tests
+after the final core correction; whitespace checks passed in both repositories.
+
+## Mage self-armor strategies - 2026-10-01, development
+
+Adapts GenericMageNonCombatStrategy's MageBuffManaStrategy/MageBuffDpsStrategy
+and MageArmorTrigger/MoltenArmorTrigger at donor
+7bae1b5c58c76a0aa20381155edc08096d1485b2. The `bmana`, `bdps`, `mage armor`
+and `molten armor` registry names and relevance 19 are retained. Both strategies
+are registered; mutually exclusive triggers select from the current active
+talent tree and learned spells on each evaluation, avoiding a stale login-time
+armor choice. Arcane prefers Mage Armor; other/unspecialized bots prefer Molten
+Armor, then learned Mage Armor, then Frost Armor. This is a bounded Cata policy,
+not a port of full donor profiles or a claim of optimal endgame rotations.
+
+Cata's unranked spell identities are Mage Armor 6117, Molten Armor 30482 and
+Frost Armor 7302. The existing caster DBC checker covers these identities and
+learn levels; Wrath's separate Ice Armor fallback is not copied. Unlike the
+donor's any-armor guard, a changed spec may replace an existing different armor.
+The native cast/exclusivity path owns replacement; no old aura is removed before
+a successful cast. The action rechecks eligibility and uses ordinary cooldown,
+GCD, mana and learned-spell validation. Combat, transfer, mounting/flight,
+missing/dead/distant controller and active carried-food recovery suppress it.
+
+Playerbots.Mage.Armor.Enabled defaults off and is cached at configuration
+load/reload, with invalid module configuration forcing it off. It shares the
+existing two-second noncombat engine cadence with rest, without adding a timer
+or scheduler. Windows and Linux worldserver/tests-common builds each passed all
+115 automated tests. The read-only local Cata DBC check also passed, confirming
+Molten Armor at level 34, Frost Armor at 54 and Mage Armor at 68. Native armor
+execution and spec-change replacement belong to the next bundled party check.
+
+## Shared carried food/drink recovery - 2026-10-01, development
+
+The next unpublished batch adapts UseFoodStrategy, scalar health/mana triggers,
+and the inventory/usefulness relationship from UseItemAction at donor
+7bae1b5c58c76a0aa20381155edc08096d1485b2. The donor `food`, `drink`, `low health`
+and `low mana` registry names and relevance 3 are retained. The initial Cata
+thresholds are 40% health and 20% mana; no cheat branch or inventory replenishment
+is included. Playerbots.Rest.Enabled defaults off and is cached at configuration
+load/reload, with invalid module configuration forcing it off.
+
+Warrior/Mage/Priest contexts register the shared strategy. A two-second cached
+inventory candidate stores only an item GUID; execution resolves it again and
+checks that it remains carried, usable and eligible. Candidate selection reads
+Cata's first valid on-use ItemTemplate effect, native food/drink categories and
+matching regeneration auras. This first batch excludes combined-category feasts,
+purchases, conjuring, potions and bank items. It does not infer regeneration from
+Wrath category numbers alone.
+
+Cata SpellCastRequest/PendingSpellCastRequest and native RequestSpellCast preserve
+ProcessItemCast validation, binding, item-use hooks, cast-item consumption and
+cooldowns. No Wrath wire layout, manual resource restoration or manual item
+deletion is used. Requests are submitted only outside casting/GCD so no delayed
+rest request is intentionally queued. A rest spell identity tracks the movement
+pause; aura completion/failure, controller combat/range, death, transfer, module
+disable and explicit movement/combat requests release it. Existing follow identity
+is preserved; resume uses current formation/path logic. Only the recorded aura is
+removed by rest cleanup. Native aura application supplies seated state.
+
+The existing engine remains the decision owner. While rest is enabled, the map
+adapter prevents duplicate engine decisions in the same update. Existing class
+action gates prevent the new rest cadence from enabling unrelated combat/healing
+routes. Priest healing and resurrection remain above rest relevance. Four new
+pure tests cover strategy wiring, resource thresholds and eligibility, not native
+item use or actual follow timing. Windows worldserver/tests-common built and all
+113 tests passed. Linux worldserver/tests-common also built and all 113 tests
+passed after the final cooldown/logging review. Live
+execution remains for the next bundled mixed-party check. Earlier milestone
+evidence below applies to the published snapshot, not this new batch.
 
 ## Linux build acceptance - 2026-10-01
 

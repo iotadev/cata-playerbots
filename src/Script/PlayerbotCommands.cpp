@@ -4,6 +4,8 @@
  */
 #include "PlayerbotModuleCommands.h"
 #include "PlayerbotManagedRoster.h"
+#include "PlayerbotDevFixture.h"
+#include "Player.h"
 #include "RandomPlayerbotFactory.h"
 #include "CharacterCache.h"
 #include "Chat.h"
@@ -471,7 +473,7 @@ public:
         std::string action;
         if (!(input >> slot >> action) || slot < 1 || slot > 4)
         {
-            handler->SendSysMessage("Usage: server playerbotdev slot <1-4> <start|stop|status|follow|hold|attack|cease|joininstance> [character GUID or dungeon map ID]");
+            handler->SendSysMessage("Usage: server playerbotdev slot <1-4> <start|stop|status|follow|hold|attack|cease|joininstance|fixture20> [character GUID or dungeon map ID]");
             handler->SetSentErrorMessage(true);
             return false;
         }
@@ -512,6 +514,15 @@ public:
         }
 
         WorldSession* bot = sWorld->FindDevPlayerbotSlot(slotId);
+        if (action == "fixture20")
+        {
+            auto role = slot == 1 ? PlayerbotDevFixture::Role::Protection : slot == 2 ? PlayerbotDevFixture::Role::Arms :
+                slot == 3 ? PlayerbotDevFixture::Role::Frost : PlayerbotDevFixture::Role::Holy;
+            bool accepted = bot && bot->GetPlayer() && PlayerbotDevFixture::Request(bot->GetPlayer()->GetGUID(), role);
+            handler->PSendSysMessage("Playerbot slot %u fixture20 %s; completion is reported by PB-FIXTURE on the map thread.",
+                slot, accepted ? "requested" : "rejected (requires explicit fixture flag and ready slot)");
+            return accepted;
+        }
         if (action == "status")
         {
             if (!bot)

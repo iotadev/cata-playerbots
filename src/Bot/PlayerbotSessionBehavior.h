@@ -7,7 +7,9 @@
 #include "PlayerbotSessionHooks.h"
 #include "ObjectGuid.h"
 #include "PlayerbotAI.h"
+#include "../Ai/Base/PlayerbotLootPolicy.h"
 #include "Engine.h"
+#include "StateEngines.h"
 #include <atomic>
 #include <memory>
 class PlayerbotSessionBehavior final : public PlayerbotSessionHooks
@@ -32,12 +34,19 @@ private:
     void UpdateServerOriginResurrection();
     void UpdateServerOriginInstanceJoin();
     void UpdateServerOriginCombat(uint32 diff);
+    void TickEngine(bool inCombat = false);
+    void SelectEngineState();
+    bool _engineTickedThisUpdate = false;
+    uint32 _restCheckTimer = 0;
     WorldSession& _session;
     // The adapter exists before login. The context/engine are made after the
     // class is known and destroyed in reverse order, with no cached Player*.
     PlayerbotAI _ai;
+    PlayerbotLoot::PassPreference _lootPassPreference;
     std::unique_ptr<AiObjectContext> _aiContext;
-    std::unique_ptr<Engine> _engine;
+    std::unique_ptr<StateEngines> _stateEngines;
+    Engine* _engine = nullptr; // borrowed active state engine
+    bool _engineTransferSuspended = false;
     bool _warriorEngineBuffAnnounced = false;
     bool _warriorEngineCombatAnnounced = false;
     bool _mageEngineCombatAnnounced = false;

@@ -3,6 +3,10 @@
  * Released under GNU GPL v2 or any later version.
  */
 #include "../src/Bot/Engine/Engine.h"
+#include "../src/Bot/Engine/StateEngines.h"
+#include "../src/Ai/Base/PlayerbotSpecStrategy.h"
+#include "../src/Ai/Class/Priest/PlayerbotPriestDpsStrategy.h"
+#include "../src/Ai/Base/PlayerbotThreatStrategy.h"
 #include <catch2/catch.hpp>
 
 namespace
@@ -65,7 +69,28 @@ public:
     explicit ReadyTrigger(PlayerbotAI* ai) : Trigger(ai, "ready") { }
     bool IsActive() override { return true; }
 };
+class NamedStrategy final : public Strategy
+{
+public:
+    NamedStrategy(PlayerbotAI* ai, std::string name) : Strategy(ai), name(std::move(name)) { }
+    std::string const getName() override { return name; }
+private:
+    std::string name;
+};
 
+class ExclusionStrategy final : public Strategy
+{
+public:
+    ExclusionStrategy(PlayerbotAI* ai, GuidSet& targets) : Strategy(ai), targets(targets) { }
+    std::string const getName() override { return "exclusion"; }
+    bool HasTargetExclusions() const override { return true; }
+    void AppendTargetExclusions(GuidSet& result, TargetValueExclusionType type) override
+    {
+        if (type == TargetValueExclusionType::Dps) result.insert(targets.begin(), targets.end());
+    }
+private:
+    GuidSet& targets;
+};
 class VetoListener final : public ActionExecutionListener
 {
 public:
@@ -115,6 +140,115 @@ struct Fixture
         triggers.Add(triggerFactory);
     }
 };
+
+class HealerPolicyAction final : public Action
+{
+public:
+    HealerPolicyAction(PlayerbotAI* ai, int& count, bool& target, bool& healing, float& mana)
+        : Action(ai, "fallback"), count(count), target(target), healing(healing), mana(mana) { }
+    bool isUseful() override { return PlayerbotPriestDps::CanAttack(true, true, target, healing, mana); }
+    bool Execute([[maybe_unused]] Event event) override { ++count; return true; }
+private:
+    int& count;
+    bool& target;
+    bool& healing;
+    float& mana;
+};
+class ThreatDamageAction final : public Action
+{
+public:
+    ThreatDamageAction(PlayerbotAI* ai, int& count) : Action(ai, "primary"), count(count) { }
+    ActionThreatType getThreatType() override { return ActionThreatType::Single; }
+    bool Execute([[maybe_unused]] Event event) override { ++count; return true; }
+private:
+    int& count;
+};
+class PolicyThreatMultiplier final : public Multiplier
+{
+public:
+    PolicyThreatMultiplier(PlayerbotAI* ai, uint8_t& percent) : Multiplier(ai, "threat"), percent(percent) { }
+    float GetValue(Action* action) override
+    {
+        return PlayerbotThreat::DamageMultiplier(action->getThreatType(), true, percent);
+    }
+private:
+    uint8_t& percent;
+};
+class PolicyThreatStrategy final : public Strategy
+{
+public:
+    PolicyThreatStrategy(PlayerbotAI* ai, uint8_t& percent) : Strategy(ai), percent(percent) { }
+    std::string const getName() override { return "policy threat"; }
+    std::vector<NextAction> getDefaultActions() override
+    {
+        return {NextAction("primary", 20.0f), NextAction("fallback", 10.0f)};
+    }
+    void InitMultipliers(std::vector<Multiplier*>& multipliers) override
+    {
+        multipliers.push_back(new PolicyThreatMultiplier(botAI, percent));
+    }
+private:
+    uint8_t& percent;
+};
+}
+
+TEST_CASE("Playerbot engine threat policy yields damage to support then resumes at lower threat", "[playerbot][engine][threat]")
+{
+    Fixture fixture;
+    uint8_t percent = 80;
+    fixture.strategies.creators["policy threat"] = [&](PlayerbotAI* ai) { return new PolicyThreatStrategy(ai, percent); };
+    fixture.actions.creators["primary"] = [&](PlayerbotAI* ai) { return new ThreatDamageAction(ai, fixture.counts.primary); };
+    Engine engine(nullptr, fixture.context);
+    engine.AddStrategy("policy threat");
+    REQUIRE(engine.Tick());
+    REQUIRE(fixture.counts.primary == 0);
+    REQUIRE(fixture.counts.fallback == 1); // support metadata remains None
+    percent = 79;
+    REQUIRE(engine.Tick());
+    REQUIRE(fixture.counts.primary == 1);
+    REQUIRE(fixture.counts.fallback == 1);
+}
+
+TEST_CASE("Playerbot active engine gathers dynamic typed exclusions and clears removed strategies", "[playerbot][engine][target]")
+{
+    Fixture fixture;
+    GuidSet targets{ObjectGuid(uint64(1))};
+    fixture.strategies.creators["exclusion"] = [&targets](PlayerbotAI* ai) { return new ExclusionStrategy(ai, targets); };
+    Engine engine(nullptr, fixture.context);
+    REQUIRE(engine.GatherTargetExclusions(TargetValueExclusionType::Dps).empty());
+    engine.AddStrategy("exclusion");
+    REQUIRE(engine.HasTargetExclusions());
+    REQUIRE(engine.GatherTargetExclusions(TargetValueExclusionType::Dps) == targets);
+    REQUIRE(engine.GatherTargetExclusions(TargetValueExclusionType::Tank).empty());
+    REQUIRE(engine.GatherTargetExclusions(TargetValueExclusionType::None).empty());
+    targets.insert(ObjectGuid(uint64(2)));
+    REQUIRE(engine.GatherTargetExclusions(TargetValueExclusionType::Dps) == targets);
+    REQUIRE(engine.RemoveStrategy("exclusion"));
+    REQUIRE_FALSE(engine.HasTargetExclusions());
+    REQUIRE(engine.GatherTargetExclusions(TargetValueExclusionType::Dps).empty());
+}
+
+TEST_CASE("Playerbot engine rechecks queued healer damage after support eligibility changes", "[playerbot][engine][priest-dps]")
+{
+    Fixture fixture;
+    bool target = true, healing = false;
+    float mana = 100.0f;
+    fixture.actions.creators["primary"] = [&fixture](PlayerbotAI* ai)
+    {
+        return new ContinuingAction(ai, fixture.counts.primary);
+    };
+    fixture.actions.creators["fallback"] = [&](PlayerbotAI* ai)
+    {
+        return new HealerPolicyAction(ai, fixture.counts.fallback, target, healing, mana);
+    };
+    Engine engine(nullptr, fixture.context);
+    REQUIRE(engine.ExecuteAction("primary") == ACTION_RESULT_OK);
+    REQUIRE(engine.QueuedCount() == 1);
+    SECTION("healing demand") { healing = true; }
+    SECTION("target cleared by control") { target = false; }
+    SECTION("mana spent") { mana = 84.0f; }
+    REQUIRE_FALSE(engine.Tick());
+    REQUIRE(fixture.counts.fallback == 0);
 }
 
 TEST_CASE("Playerbot engine schedules prerequisites before the primary action", "[playerbot][engine]")
@@ -187,4 +321,143 @@ TEST_CASE("Playerbot minimal tick leaves low-priority queued work for a normal t
     REQUIRE(engine.QueuedCount() == 1);
     REQUIRE(engine.Tick());
     REQUIRE(fixture.counts.fallback == 1);
+}
+
+TEST_CASE("Playerbot state transition discards prerequisites and separates defaults", "[playerbot][engine][state]")
+{
+    Fixture fixture;
+    auto* strategy = fixture.context.GetStrategy("test");
+    strategy->actionNodeFactories.creators["primary"] = [](PlayerbotAI*)
+    {
+        return new ActionNode("primary", {NextAction("prepare", 10.0f)});
+    };
+    StateEngines engines(nullptr, fixture.context);
+    engines.Get(StateEngines::State::Combat).AddStrategy("test");
+    REQUIRE_FALSE(engines.Active().Tick()); // combat defaults cannot leak into idle
+    REQUIRE(engines.Select(StateEngines::State::Combat));
+    REQUIRE(engines.Active().Tick());
+    REQUIRE(fixture.counts.prepare == 1);
+    REQUIRE(engines.Active().QueuedCount() > 0);
+    SECTION("target lost") { engines.Select(StateEngines::State::NonCombat); }
+    SECTION("death") { engines.Select(StateEngines::State::Dead); }
+    REQUIRE_FALSE(engines.Active().Tick());
+    REQUIRE(engines.Get(StateEngines::State::Combat).QueuedCount() == 0);
+    REQUIRE(fixture.counts.primary == 0);
+    engines.Select(StateEngines::State::Combat);
+    REQUIRE(engines.Active().Tick()); // fresh engagement must prepare again
+    REQUIRE(fixture.counts.prepare == 2);
+    REQUIRE(fixture.counts.primary == 0);
+    REQUIRE(engines.Active().HasStrategy("test"));
+}
+
+TEST_CASE("Playerbot stop clears continuers but steady state preserves them", "[playerbot][engine][state]")
+{
+    Fixture fixture;
+    fixture.actions.creators["primary"] = [&fixture](PlayerbotAI* ai)
+    {
+        return new ContinuingAction(ai, fixture.counts.primary);
+    };
+    StateEngines engines(nullptr, fixture.context);
+    engines.Select(StateEngines::State::Combat);
+    REQUIRE(engines.Active().ExecuteAction("primary") == ACTION_RESULT_OK);
+    REQUIRE_FALSE(engines.Select(StateEngines::State::Combat));
+    REQUIRE(engines.Active().QueuedCount() == 1);
+    SECTION("uninterrupted")
+    {
+        REQUIRE(engines.Active().Tick());
+        REQUIRE(fixture.counts.fallback == 1);
+    }
+    SECTION("stop or transfer without a native combat flag change")
+    {
+        engines.CancelPendingActions();
+        REQUIRE_FALSE(engines.Active().Tick());
+        REQUIRE(fixture.counts.fallback == 0);
+    }
+}
+
+TEST_CASE("Playerbot recovery restores noncombat support without dead-state actions", "[playerbot][engine][state]")
+{
+    Fixture fixture;
+    StateEngines engines(nullptr, fixture.context);
+    engines.Get(StateEngines::State::NonCombat).AddStrategy("test");
+    REQUIRE(engines.Active().Tick());
+    REQUIRE(fixture.counts.primary == 1);
+    engines.Select(StateEngines::State::Dead);
+    REQUIRE_FALSE(engines.Active().Tick());
+    REQUIRE(fixture.counts.primary == 1);
+    engines.Select(StateEngines::State::NonCombat);
+    REQUIRE(engines.Active().Tick());
+    REQUIRE(fixture.counts.primary == 2);
+}
+
+TEST_CASE("Playerbot spec policy selects only implemented native Cata routes", "[playerbot][spec]")
+{
+    REQUIRE(std::string(PlayerbotSpec::CombatStrategy(CLASS_WARRIOR, TALENT_TREE_WARRIOR_PROTECTION)) == "tank");
+    REQUIRE(std::string(PlayerbotSpec::CombatStrategy(CLASS_WARRIOR, 0)) == "warrior");
+    REQUIRE(std::string(PlayerbotSpec::CombatStrategy(CLASS_WARRIOR, TALENT_TREE_WARRIOR_ARMS)) == "arms");
+    REQUIRE(std::string(PlayerbotSpec::CombatStrategy(CLASS_WARRIOR, TALENT_TREE_WARRIOR_FURY)) == "fury");
+    REQUIRE(std::string(PlayerbotSpec::CombatStrategy(CLASS_MAGE, TALENT_TREE_MAGE_FROST)) == "frost");
+    REQUIRE(std::string(PlayerbotSpec::CombatStrategy(CLASS_MAGE, TALENT_TREE_MAGE_ARCANE)) == "arcane");
+    REQUIRE(std::string(PlayerbotSpec::CombatStrategy(CLASS_MAGE, TALENT_TREE_MAGE_FIRE)) == "fire");
+    REQUIRE(std::string(PlayerbotSpec::CombatStrategy(CLASS_MAGE, 0)) == "mage");
+    REQUIRE(std::string(PlayerbotSpec::CombatStrategy(CLASS_PRIEST, TALENT_TREE_PRIEST_SHADOW)) == "heal");
+    REQUIRE(PlayerbotSpec::CombatStrategy(CLASS_ROGUE, 0) == nullptr);
+}
+
+TEST_CASE("Playerbot spec refresh replaces combat sibling and preserves shared strategies", "[playerbot][spec]")
+{
+    Fixture fixture;
+    auto* combat = new NamedObjectContext<Strategy>(false, true);
+    for (std::string const name : {"mage", "frost", "fire", "arcane"})
+        combat->creators[name] = [name](PlayerbotAI* ai) { return new NamedStrategy(ai, name); };
+    fixture.strategies.Add(combat);
+    Engine engine(nullptr, fixture.context);
+    engine.AddStrategy("test"); // unrelated shared strategy
+    REQUIRE(PlayerbotSpec::Refresh(engine, CLASS_MAGE, 0));
+    REQUIRE(engine.HasStrategy("mage"));
+    REQUIRE(PlayerbotSpec::Refresh(engine, CLASS_MAGE, TALENT_TREE_MAGE_FROST));
+    REQUIRE(engine.HasStrategy("frost"));
+    REQUIRE_FALSE(engine.HasStrategy("mage"));
+    REQUIRE(engine.HasStrategy("test"));
+    REQUIRE(PlayerbotSpec::Refresh(engine, CLASS_MAGE, TALENT_TREE_MAGE_FIRE));
+    REQUIRE(engine.HasStrategy("fire"));
+    REQUIRE_FALSE(engine.HasStrategy("frost"));
+    REQUIRE(PlayerbotSpec::Refresh(engine, CLASS_MAGE, TALENT_TREE_MAGE_ARCANE));
+    REQUIRE(engine.HasStrategy("arcane"));
+    REQUIRE_FALSE(engine.HasStrategy("fire"));
+    REQUIRE(engine.HasStrategy("test"));
+    REQUIRE(PlayerbotSpec::Refresh(engine, CLASS_MAGE, 0));
+    REQUIRE(engine.HasStrategy("mage"));
+    REQUIRE_FALSE(engine.HasStrategy("arcane"));
+}
+
+TEST_CASE("Playerbot unchanged spec leaves queued work while a changed route resets it", "[playerbot][spec]")
+{
+    Fixture fixture;
+    auto* combat = new NamedObjectContext<Strategy>(false, true);
+    for (std::string const name : {"warrior", "arms", "fury", "tank"})
+        combat->creators[name] = [name](PlayerbotAI* ai) { return new NamedStrategy(ai, name); };
+    fixture.strategies.Add(combat);
+    fixture.actions.creators["primary"] = [&fixture](PlayerbotAI* ai)
+    {
+        return new ContinuingAction(ai, fixture.counts.primary);
+    };
+    Engine engine(nullptr, fixture.context);
+    REQUIRE(PlayerbotSpec::Refresh(engine, CLASS_WARRIOR, TALENT_TREE_WARRIOR_ARMS));
+    REQUIRE(engine.ExecuteAction("primary") == ACTION_RESULT_OK);
+    REQUIRE(engine.QueuedCount() == 1);
+    REQUIRE_FALSE(PlayerbotSpec::Refresh(engine, CLASS_WARRIOR, TALENT_TREE_WARRIOR_ARMS));
+    REQUIRE(engine.QueuedCount() == 1);
+    REQUIRE(PlayerbotSpec::Refresh(engine, CLASS_WARRIOR, TALENT_TREE_WARRIOR_PROTECTION));
+    REQUIRE(engine.QueuedCount() == 0);
+    REQUIRE(engine.HasStrategy("tank"));
+    REQUIRE_FALSE(engine.HasStrategy("arms"));
+    REQUIRE(PlayerbotSpec::Refresh(engine, CLASS_WARRIOR, TALENT_TREE_WARRIOR_FURY));
+    REQUIRE(engine.HasStrategy("fury"));
+    REQUIRE_FALSE(engine.HasStrategy("tank"));
+    REQUIRE_FALSE(engine.HasStrategy("warrior"));
+    REQUIRE(PlayerbotSpec::Refresh(engine, CLASS_WARRIOR, 0));
+    REQUIRE_FALSE(engine.HasStrategy("fury"));
+    REQUIRE_FALSE(engine.HasStrategy("tank"));
+    REQUIRE_FALSE(PlayerbotSpec::Refresh(engine, CLASS_ROGUE, 0));
 }

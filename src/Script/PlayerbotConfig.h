@@ -10,5 +10,9 @@ bool PlayerbotModuleEngineWarriorCombatEnabled();
 bool PlayerbotModuleEngineMageCombatEnabled();
 bool PlayerbotModuleEnginePriestHealEnabled();
 bool PlayerbotModuleEnginePartyBuffEnabled();
+bool PlayerbotModuleRestEnabled();
+bool PlayerbotModuleMageArmorEnabled();
+bool PlayerbotModuleLootPassEnabled();
+bool PlayerbotModuleCorpseLootEnabled();
 
 #endif

@@ -4,6 +4,7 @@
  * Released under GNU GPL v2 or any later version.
  */
 #include "AiObjectContext.h"
+#include "../PlayerbotAI.h"
 
 SharedNamedObjectContextList<Strategy> AiObjectContext::sharedStrategyContexts;
 SharedNamedObjectContextList<Action> AiObjectContext::sharedActionContexts;
@@ -17,7 +18,15 @@ AiObjectContext::AiObjectContext(PlayerbotAI* botAI,
                                  SharedNamedObjectContextList<UntypedValue>& sharedValueContext)
     : PlayerbotAIAware(botAI), strategyContexts(sharedStrategyContext),
       actionContexts(sharedActionContext), triggerContexts(sharedTriggerContext),
-      valueContexts(sharedValueContext) { }
+      valueContexts(sharedValueContext)
+{
+    if (botAI) botAI->SetAiObjectContext(this);
+}
+AiObjectContext::~AiObjectContext()
+{
+    if (botAI && botAI->GetAiObjectContext() == this)
+        botAI->SetAiObjectContext(nullptr);
+}
 
 Strategy* AiObjectContext::GetStrategy(std::string const name)
 {
