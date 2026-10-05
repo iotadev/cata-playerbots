@@ -34,6 +34,10 @@ public:
     virtual std::vector<NextAction> getAlternatives() { return {}; }
     virtual std::vector<NextAction> getContinuers() { return {}; }
     virtual ActionThreatType getThreatType() { return ActionThreatType::None; }
+    // Donor FocusMultiplier RTTI categories, expressed as explicit adapter metadata.
+    // Future area healing / attacker-debuff actions must declare their category.
+    virtual bool isHealingAction() { return false; }
+    virtual bool isDebuffOnAttacker() { return false; }
     void Update() { }
     void Reset() { }
     void MakeVerbose() { verbose = true; }

@@ -7,7 +7,9 @@
 #define PLAYERBOTS_PARTY_BUFF_STRATEGY_H
 
 #include "PlayerbotCombatDecision.h"
-#include "../../Bot/Engine/Strategy/Strategy.h"
+#include "../../Bot/Engine/AiObjectContext.h"
+#include <string_view>
+#include "SharedDefines.h"
 
 namespace PlayerbotPartyBuff
 {
@@ -15,6 +17,23 @@ inline constexpr PlayerbotDecision::PartyBuff Brilliance { 1459, 79057, 79058, "
 inline constexpr PlayerbotDecision::PartyBuff Fortitude { 21562, 79104, 79105, "Power Word: Fortitude" };
 inline constexpr char MageAction[] = "arcane intellect on party";
 inline constexpr char PriestAction[] = "power word: fortitude on party";
+inline char const* AuraQualifier(PlayerbotDecision::PartyBuff const& buff)
+{
+    if (buff.SpellId == Brilliance.SpellId) return "arcane intellect,arcane brilliance";
+    if (buff.SpellId == Fortitude.SpellId) return "power word: fortitude,prayer of fortitude";
+    return nullptr;
+}
+inline PlayerbotDecision::PartyBuff const* ResolveAuraBuff(std::uint8_t playerClass, std::string_view qualifier)
+{
+    if (playerClass == CLASS_MAGE && (qualifier == "arcane intellect" || qualifier == AuraQualifier(Brilliance)))
+        return &Brilliance;
+    if (playerClass == CLASS_PRIEST && (qualifier == "power word: fortitude" || qualifier == AuraQualifier(Fortitude)))
+        return &Fortitude;
+    return nullptr; // No arbitrary spell-name lists or cross-class buff routes.
+}
+void AddValues(SharedNamedObjectContextList<UntypedValue>& values);
+bool RebuffOnGlobalCooldown(PlayerbotAI& ai);
+bool WaitForRebuff(PlayerbotAI& ai);
 
 class Strategy final : public ::Strategy
 {

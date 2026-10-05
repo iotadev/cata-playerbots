@@ -4,6 +4,18 @@
 #include <limits>
 using PlayerbotTargetSelection::Candidate;
 
+TEST_CASE("Playerbot target control protection is shared and clears with native control", "[playerbot][target]")
+{
+    using PlayerbotTargetSelection::CrowdControlAllows;
+    REQUIRE(CrowdControlAllows(false, false, false, false));
+    REQUIRE_FALSE(CrowdControlAllows(true, false, false, false));
+    REQUIRE_FALSE(CrowdControlAllows(false, true, false, false));
+    REQUIRE_FALSE(CrowdControlAllows(false, false, true, false));
+    REQUIRE_FALSE(CrowdControlAllows(false, false, false, true));
+    REQUIRE_FALSE(CrowdControlAllows(true, true, true, true));
+    REQUIRE(CrowdControlAllows(false, false, false, false));
+}
+
 TEST_CASE("Playerbot fallback routes unassigned DPS Warriors without pretending they are tanks", "[playerbot][target]")
 {
     using PlayerbotTargetSelection::FallbackValue;
@@ -45,6 +57,28 @@ TEST_CASE("Playerbot tank aggro subset accepts self and another recognized tank 
     REQUIRE(HasTankAggro(true, true, false));
     REQUIRE(HasTankAggro(true, false, true));
     REQUIRE_FALSE(HasTankAggro(true, false, false));
+}
+
+TEST_CASE("Playerbot combat scope defends only engaged attached party members", "[playerbot][target]")
+{
+    using PlayerbotTargetSelection::CombatScopeAllows;
+    REQUIRE(CombatScopeAllows(true, false, false, false));
+    REQUIRE(CombatScopeAllows(false, true, true, true));
+    REQUIRE_FALSE(CombatScopeAllows(false, false, true, true));
+    REQUIRE_FALSE(CombatScopeAllows(false, true, false, true));
+    REQUIRE_FALSE(CombatScopeAllows(false, true, true, false));
+    REQUIRE_FALSE(CombatScopeAllows(false, false, false, false));
+}
+
+TEST_CASE("Playerbot tank protection preserves commands and does not steal tank aggro", "[playerbot][target]")
+{
+    using PlayerbotTargetSelection::ShouldProtectPartyMember;
+    REQUIRE(ShouldProtectPartyMember(true, true, true, false, false));
+    REQUIRE_FALSE(ShouldProtectPartyMember(false, true, true, false, false));
+    REQUIRE_FALSE(ShouldProtectPartyMember(true, false, true, false, false));
+    REQUIRE_FALSE(ShouldProtectPartyMember(true, true, false, false, false));
+    REQUIRE_FALSE(ShouldProtectPartyMember(true, true, true, true, false));
+    REQUIRE_FALSE(ShouldProtectPartyMember(true, true, true, false, true));
 }
 
 TEST_CASE("Playerbot target icons retain donor indices and reject unknown names", "[playerbot][target]")

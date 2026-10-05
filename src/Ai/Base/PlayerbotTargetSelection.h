@@ -12,6 +12,13 @@
 class Engine;
 namespace PlayerbotTargetSelection
 {
+// Donor InvalidTargetValue protects control targets independently of ranking.
+// Roots/stuns are not blanket exclusions in this policy.
+inline bool CrowdControlAllows(bool polymorphed, bool charmed, bool feared, bool isolated)
+{
+    return !polymorphed && !charmed && !feared && !isolated;
+}
+bool IsProtectedTarget(Creature const& target);
 inline char const* FallbackValue(std::uint8_t playerClass, std::uint32_t talentTree,
     bool warriorEnabled, bool mageEnabled, bool priestEnabled)
 {
@@ -71,6 +78,13 @@ inline bool HasTankAggro(bool hasVictim, bool victimIsBot, bool victimIsOtherTan
 {
     return !hasVictim || victimIsBot || victimIsOtherTank;
 }
+// Session adapter deliberately switches only to rescue a party member. It does
+// not cycle owned targets by threat, override explicit commands, or pull adds.
+inline bool ShouldProtectPartyMember(bool autoAssisted, bool differentTarget,
+    bool partyVictim, bool victimIsBot, bool victimIsOtherTank)
+{
+    return autoAssisted && differentTarget && partyVictim && !victimIsBot && !victimIsOtherTank;
+}
 inline int TankBand(TankCandidate const& candidate)
 {
     return !candidate.HasAggro ? 2 : (candidate.InMelee ? 1 : 0);
@@ -82,6 +96,14 @@ inline bool BetterTank(TankCandidate const& next, TankCandidate const& old)
     return nextBand == 2 ? next.Distance < old.Distance : next.Threat < old.Threat;
 }
 void AddContexts(SharedNamedObjectContextList<UntypedValue>& values);
+inline bool CombatScopeAllows(bool ownerEngaged, bool attachedParty, bool eligibleMember, bool memberEngaged)
+{
+    return ownerEngaged || (attachedParty && eligibleMember && memberEngaged);
+}
+bool IsEngagedWithAttachedParty(Player const& bot, Player const& owner, Creature const& target);
+// Native map/session-update contexts only. Suppresses noncombat work; it does
+// not admit an attack target or change decision-engine state.
+bool HasNearbyPartyCombat(Player const& bot, Player const& owner);
 // Native map-thread adapter: GUID result, no autonomous pull or retained Unit pointer.
 ObjectGuid SelectDpsTarget(PlayerbotAI& ai, Engine const& engine);
 ObjectGuid SelectTankTarget(PlayerbotAI& ai, Engine const& engine);

@@ -7,7 +7,10 @@
  */
 #include "WarriorAiObjectContext.h"
 #include "../../Base/PlayerbotRestStrategy.h"
+#include "../../Base/PlayerbotPotionStrategy.h"
 #include "../../Base/PlayerbotCombatValues.h"
+#include "../../Base/PlayerbotCombatMovement.h"
+#include "../../Base/PlayerbotPosition.h"
 #include "../../Base/PlayerbotThreatStrategy.h"
 #include "../../Base/PlayerbotInterruptStrategy.h"
 #include "../../Base/PlayerbotClassSpellPolicy.h"
@@ -277,6 +280,7 @@ public:
     }
     void InitTriggers(std::vector<TriggerNode*>& triggers) override
     {
+        PlayerbotCombatMovement::AddTriggers(triggers);
         PlayerbotInterrupt::AddTrigger(triggers, "pummel");
         bool tank = (GetType() & STRATEGY_TYPE_TANK) != 0;
         triggers.push_back(new TriggerNode(tank ? "high rage available" : "medium rage available",
@@ -367,10 +371,13 @@ struct SharedWarriorContexts
     SharedWarriorContexts()
     {
         PlayerbotCombatValues::AddContexts(values);
+        PlayerbotCombatMovement::AddContexts(actions, triggers, values);
+        PlayerbotPosition::AddContexts(strategies, actions, triggers, values);
         PlayerbotThreat::AddContexts(strategies);
         PlayerbotRest::AddContexts(strategies, actions, triggers);
+        PlayerbotPotion::AddContexts(strategies, actions, triggers);
         PlayerbotCorpseLoot::AddContexts(strategies, actions, triggers);
-        PlayerbotInterrupt::AddContexts(actions, triggers, "pummel", 6552, PlayerbotModuleEngineWarriorCombatEnabled);
+        PlayerbotInterrupt::AddContexts(actions, triggers, values, "pummel", 6552, PlayerbotModuleEngineWarriorCombatEnabled);
         auto* strategyFactory = new NamedObjectContext<Strategy>();
         strategyFactory->creators["nc"] = [](PlayerbotAI* ai) { return new WarriorNonCombatStrategy(ai); };
         strategies.Add(strategyFactory);

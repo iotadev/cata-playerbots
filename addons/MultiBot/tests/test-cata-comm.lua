@@ -77,8 +77,34 @@ assert(completed == nil and MultiBot.bridge.botLifecycleCommands[token] ~= nil)
 receive("BOT_LIFECYCLE_STATE~" .. token .. "~5~Bot%25name~OFFLINE~OK")
 assert(completed and completed.status == "OK" and completed.final)
 
+-- Drive the actual donor strategy reader and timer. The server's 4s aggregate
+-- deadline must leave the addon's 5s pending token alive for a TIMEOUT ACK.
+MultiBot.bridge.strategyMutationCapable = true
+local strategyResult
+local strategyToken = assert(comm.RunStrategyCommand("PARTY", "", "C", "+focus",
+  function(result) strategyResult = result end))
+local strategyTimer = scheduled[#scheduled]
+assert(strategyTimer[1] == 5.0)
+assert(sent[#sent][2]:find("RUN~STRATEGY~PARTY~~" .. strategyToken .. "~C~", 1, true))
+receive("STRATEGY_ACK~PARTY~~" .. strategyToken .. "~C~2~1~0~TIMEOUT")
+assert(strategyResult and strategyResult.reason == "TIMEOUT")
+assert(strategyResult.matched == 2 and strategyResult.succeeded == 1 and strategyResult.failed == 0)
+assert(MultiBot.bridge.strategyMutationCommands[strategyToken] == nil)
+strategyTimer[2]()
+assert(strategyResult.reason == "TIMEOUT")
+
+local lateResult, lateCount = nil, 0
+strategyToken = assert(comm.RunStrategyCommand("PARTY", "", "C", "+focus",
+  function(result) lateResult = result; lateCount = lateCount + 1 end))
+strategyTimer = scheduled[#scheduled]
+assert(strategyTimer[1] == 5.0)
+strategyTimer[2]()
+assert(lateResult and lateResult.status == "timeout" and lateCount == 1)
+receive("STRATEGY_ACK~PARTY~~" .. strategyToken .. "~C~2~1~0~TIMEOUT")
+assert(lateCount == 1 and MultiBot.bridge.lastError == "STRATEGY_ACK_INVALID")
+
 comm = loadComm(function() return false end)
 assert(not comm.SendHello() and #sent == 0)
 comm = loadComm(nil)
 assert(not comm.SendHello() and #sent == 0)
-print("Cata comm mock checks passed (transport, roster integrity, sender check, pending/completed lifecycle)")
+print("Cata comm mock checks passed (transport, roster, lifecycle, strategy ACK/timer)")

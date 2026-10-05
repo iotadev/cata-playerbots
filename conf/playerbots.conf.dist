@@ -64,6 +64,12 @@ Playerbots.Dev.EnginePartyBuff = 0
 # Default-off pending the next bundled mixed-party client check.
 Playerbots.Rest.Enabled = 0
 
+# Optional carried, instant healing/mana potions in combat for supported classes.
+# Donor defaults: below 25% health / 40% mana. Native item cooldowns/consumption apply.
+# Prefers carried native Healthstones, falling back to healing potions.
+# No grants, direct restoration or flask use. Default-off pending replay.
+Playerbots.Potions.Enabled = 0
+
 # Optional spec-aware Mage self-armor upkeep through the existing engine.
 # Arcane prefers Mage Armor; other/unspecialized bots prefer Molten Armor.
 # Falls back to learned Mage/Frost Armor; never grants an unlearned spell.
@@ -198,3 +204,46 @@ Playerbots.Managed.AllowPlayerControl = 0
 # current party control. GMs bypass links/faction/party checks while this service
 # is enabled. Invalid links disable player access; console controls remain usable.
 Playerbots.Managed.AccountLinks =
+
+# Native leader/assistant ready checks: operational state and carried supplies.
+# Requires alive, idle, no transfer/cast/rebuff, HP >85%, MP >65% for mana users,
+# and initiator on the same map within 100 yards. Usable food/healing potions
+# required; mana users also need actual drink/mana potions. No encounter or full
+# buff-coverage guarantee. Replies expire after 30 seconds. Disabled by default.
+Playerbots.ReadyCheck.Enabled = 0
+
+# Optional donor-style rebuff before answering a native ready check. Requires
+# ReadyCheck.Enabled and existing supported Mage/Priest party-buff/controller
+# eligibility. Waits only within the native check's 30-second lifetime. Missing
+# supplies or failed/canceled passes never become a ready response.
+Playerbots.ReadyCheck.ForceRebuff = 0
+
+# Ground-only controller mount coordination. Requires native level/riding and an
+# eligible learned mount; does not grant training/spells. Native follow/casting
+# remain authoritative. No flight, travel forms, vehicles, item mounts or BGs.
+# Only this adapter's own mount cast/aura is canceled when yielding to control.
+Playerbots.Mount.Ground.Enabled = 0
+
+# Saved-position stay for an attached controller. Disabled keeps the old hold
+# alias. Hold remains plain stop; follow/control/lifecycle changes clear anchors.
+# Native ground pathing only; no combat stay, ghost travel or persistence.
+Playerbots.Movement.Stay.Enabled = 0
+
+# Bounded ordinary whisper/party strategy controls. co/nc/de query registrations;
+# co focus/threat/potions and nc food/loot accept +, -, ~. Roles/specs/stay are protected. Changes are
+# session-local, require an attached authorized controller and safe idle state.
+# Does not enable globally disabled recovery/loot; disabling this restores class defaults.
+# Addon mutation requires the separate option below.
+Playerbots.StrategyControl.Enabled = 0
+
+# Structured MultiBot mutation acknowledgements. Requires StrategyControl.Enabled.
+# BOT scope: C focus/threat/potions, N food/loot operators; unsupported requests
+# explicitly reject. No role overrides or persistence.
+Playerbots.StrategyControl.AddonMutations = 0
+
+# Opt-in bounded group mutations; also requires Enabled and AddonMutations.
+# ALL = authorized controlled bots; GROUP/PARTY = current group (including raid);
+# RAID = current raid. Maximum 128 bots, 32 pending batches, one per account.
+# ACK follows execution or timeout. Unresolved timeout outcomes are unknown:
+# refresh STATE before retrying a toggle. No rollback or automatic retry.
+Playerbots.StrategyControl.GroupMutations = 0

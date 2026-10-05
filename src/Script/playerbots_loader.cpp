@@ -8,6 +8,7 @@
 #include "RandomPlayerbotFactory.h"
 
 void AddSC_playerbot_chat_commands();
+void UpdatePlayerbotAddonStrategyBatches(); // World-thread inbox/ACK pump; never reads engines.
 
 namespace
 {
@@ -18,6 +19,7 @@ public:
     void OnUpdate(uint32 /*diff*/) override
     {
         RandomPlayerbotFactory::UpdateCallbacks();
+        UpdatePlayerbotAddonStrategyBatches();
     }
     void OnStartup() override
     {

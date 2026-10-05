@@ -20,12 +20,24 @@ TEST_CASE("Playerbot interrupt triggers retain donor names and interrupt priorit
     std::vector<TriggerNode*> nodes;
     PlayerbotInterrupt::AddTrigger(nodes, "pummel");
     PlayerbotInterrupt::AddTrigger(nodes, "counterspell");
-    REQUIRE(nodes.size() == 2);
+    REQUIRE(nodes.size() == 4);
     for (std::size_t i = 0; i < nodes.size(); ++i)
     {
         std::unique_ptr<TriggerNode> node(nodes[i]);
-        REQUIRE(node->getName() == (i ? "counterspell" : "pummel"));
+        std::string expected = i < 2 ? "pummel" : "counterspell";
+        if (i % 2) expected += " on enemy healer";
+        REQUIRE(node->getName() == expected);
         REQUIRE(node->getHandlers()[0].getName() == node->getName());
         REQUIRE(node->getHandlers()[0].getRelevance() == ACTION_INTERRUPT);
     }
+}
+TEST_CASE("Playerbot secondary interrupt policy requires an engaged positive interruptible usable cast", "[playerbot][interrupt]")
+{
+    using PlayerbotInterrupt::EnemyHealerCandidate;
+    REQUIRE(EnemyHealerCandidate(false, true, false, true, true));
+    REQUIRE_FALSE(EnemyHealerCandidate(true, true, false, true, true));
+    REQUIRE_FALSE(EnemyHealerCandidate(false, false, false, true, true));
+    REQUIRE_FALSE(EnemyHealerCandidate(false, true, true, true, true));
+    REQUIRE_FALSE(EnemyHealerCandidate(false, true, false, false, true));
+    REQUIRE_FALSE(EnemyHealerCandidate(false, true, false, true, false));
 }

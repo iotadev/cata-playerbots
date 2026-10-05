@@ -38,6 +38,17 @@ inline FollowPosition PositionForSlot(std::size_t index, std::size_t count)
     float angle = Behind + (float(index) - center) * 0.50f;
     return { 2.8f, angle, std::uint32_t((count << 16) | index) };
 }
+// Bounded adaptation of donor CircleFormation's wider caster radius. Six
+// yards is this companion adapter's choice, not the donor's configurable range.
+inline FollowPosition WithCasterSpacing(FollowPosition position, bool caster)
+{
+    if (caster)
+    {
+        position.Distance = 6.0f;
+        position.Signature |= 0x80000000u;
+    }
+    return position;
+}
 // The far-follow path mode has hysteresis so short distance changes do not
 // repeatedly replace a movement generator.
 inline bool ShouldPathCatchUp(bool alreadyPathing, float distance)

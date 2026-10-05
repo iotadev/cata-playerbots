@@ -12,7 +12,10 @@
 #include "../../Base/PlayerbotCombatDecision.h"
 #include "../../Base/PlayerbotPartyBuffStrategy.h"
 #include "../../Base/PlayerbotRestStrategy.h"
+#include "../../Base/PlayerbotPotionStrategy.h"
 #include "../../Base/PlayerbotCombatValues.h"
+#include "../../Base/PlayerbotCombatMovement.h"
+#include "../../Base/PlayerbotPosition.h"
 #include "../../Base/PlayerbotThreatStrategy.h"
 #include "../../Base/PlayerbotInterruptStrategy.h"
 #include "../../Base/PlayerbotClassSpellPolicy.h"
@@ -60,17 +63,21 @@ bool VisitCurseCandidates(PlayerbotAI* ai, bool party, Attempt&& attempt)
     };
     if (!party)
         return eligible(bot);
-    auto candidates = PlayerbotPartySupport::Candidates(*bot, ai->GetController());
-    return PlayerbotPartySupport::TryInPriorityOrder(candidates,
-        [](Player* member) { return member->GetHealthPct(); },
+    auto candidates = PlayerbotPartySupport::LivingSupportCandidates(*bot, ai->GetController());
+    return PlayerbotPartySupport::TryCandidates(candidates,
         [&](Player* member) { return member != bot && eligible(member); });
 }
 
+bool CurseNeeded(PlayerbotAI* ai, bool party)
+{
+    return party ? CurseCureReady(ai) && !PlayerbotPartySupport::DispelTarget(*ai, DISPEL_CURSE).IsEmpty() :
+        VisitCurseCandidates(ai, false, [](Player&) { return true; });
+}
 class CurseTrigger final : public Trigger
 {
 public:
     CurseTrigger(PlayerbotAI* ai, char const* name, bool party) : Trigger(ai, name, 1), party(party) { }
-    bool IsActive() override { return VisitCurseCandidates(botAI, party, [](Player&) { return true; }); }
+    bool IsActive() override { return CurseNeeded(botAI, party); }
 private:
     bool party;
 };
@@ -78,7 +85,7 @@ class CurseAction final : public Action
 {
 public:
     CurseAction(PlayerbotAI* ai, char const* name, bool party) : Action(ai, name), party(party) { }
-    bool isUseful() override { return VisitCurseCandidates(botAI, party, [](Player&) { return true; }); }
+    bool isUseful() override { return CurseNeeded(botAI, party); }
     bool Execute([[maybe_unused]] Event event) override
     {
         return VisitCurseCandidates(botAI, party, [&](Player& member)
@@ -248,7 +255,12 @@ public:
         return PlayerbotDecision::TryCast(*bot, selfTarget ? static_cast<Unit&>(*bot) : static_cast<Unit&>(*target),
                                           spellId, name.c_str());
     }
-    ActionThreatType getThreatType() override { return selfTarget ? ActionThreatType::None : ActionThreatType::Single; }
+    ActionThreatType getThreatType() override
+    {
+        SpellInfo const* spell = sSpellMgr->GetSpellInfo(spellId);
+        // Self-centered hostile area spells are not friendly self-buffs (e.g. Frost Nova).
+        return PlayerbotThreat::ClassifySpellTarget(selfTarget, spell && spell->IsPositive());
+    }
 
 private:
     uint32 spellId;
@@ -353,6 +365,7 @@ public:
     }
     void InitTriggers(std::vector<TriggerNode*>& triggers) override
     {
+        PlayerbotCombatMovement::AddTriggers(triggers, true);
         AddMageDefenseTriggers(triggers);
         PlayerbotInterrupt::AddTrigger(triggers, "counterspell");
         triggers.push_back(new TriggerNode("spellsteal", { NextAction("spellsteal", 40.0f) }));
@@ -413,6 +426,7 @@ public:
     {
         // Preserve donor Brain Freeze > Deep Freeze ordering, raised above the
         // existing Cata Ice Lance fallback. Native cooldown checks decide casts.
+        PlayerbotCombatMovement::AddTriggers(triggers, true);
         triggers.push_back(new TriggerNode("brain freeze", { NextAction("frostfire bolt", 23.0f) }));
         triggers.push_back(new TriggerNode("deep freeze", { NextAction("deep freeze", 22.0f) }));
         AddMageDefenseTriggers(triggers);
@@ -436,11 +450,14 @@ struct SharedMageContexts
     SharedMageContexts()
     {
         PlayerbotCombatValues::AddContexts(values);
+        PlayerbotCombatMovement::AddContexts(actions, triggers, values);
+        PlayerbotPosition::AddContexts(strategies, actions, triggers, values);
         PlayerbotThreat::AddContexts(strategies);
         PlayerbotRest::AddContexts(strategies, actions, triggers);
+        PlayerbotPotion::AddContexts(strategies, actions, triggers);
         PlayerbotCorpseLoot::AddContexts(strategies, actions, triggers);
         PlayerbotMageArmor::AddContexts(strategies, actions, triggers);
-        PlayerbotInterrupt::AddContexts(actions, triggers, "counterspell", 2139, PlayerbotModuleEngineMageCombatEnabled);
+        PlayerbotInterrupt::AddContexts(actions, triggers, values, "counterspell", 2139, PlayerbotModuleEngineMageCombatEnabled);
         auto* strategyFactory = new NamedObjectContext<Strategy>();
         strategyFactory->creators["buff"] = [](PlayerbotAI* ai)
         {

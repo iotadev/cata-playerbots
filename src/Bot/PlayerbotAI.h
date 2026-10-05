@@ -7,6 +7,8 @@
 
 #include "ObjectGuid.h"
 #include "../Ai/Base/PlayerbotCorpseLoot.h"
+#include "../Ai/Base/PlayerbotPartySupport.h"
+#include "ForceRebuff.h"
 
 class Creature;
 class Player;
@@ -32,10 +34,18 @@ public:
     void SetController(ObjectGuid guid)
     {
         if (controllerGuid != guid)
+        {
+            forceRebuff.End();
             lootCandidates.Clear();
+            stayActive = false;
+        }
         controllerGuid = guid;
     }
-    void ClearController() { controllerGuid.Clear(); lootCandidates.Clear(); }
+    void ClearController() { controllerGuid.Clear(); lootCandidates.Clear(); forceRebuff.End(); stayActive = false; }
+    bool IsStaying() const { return stayActive; }
+    void SetStaying(bool value) { stayActive = value; }
+    ForceRebuffState& Rebuff() { return forceRebuff; }
+    ForceRebuffState const& Rebuff() const { return forceRebuff; }
     void SetCurrentTarget(ObjectGuid guid) { targetGuid = guid; }
     void ClearCurrentTarget() { targetGuid.Clear(); }
     // Map-owned rest state contains only a spell identity, never an item/player pointer.
@@ -48,19 +58,27 @@ public:
     ObjectGuid GetDefeatedCreature() const { return defeatedCreature; }
     PlayerbotCorpseLoot::Candidates& LootCandidates() { return lootCandidates; }
     PlayerbotCorpseLoot::Pursuit& LootPursuit() { return lootPursuit; }
+    PlayerbotPartySupport::ReachRequest& SupportReachRequests() { return supportReachRequests; }
+    void RequestSpellChaseRefresh() { spellChaseRefresh = true; }
+    bool NeedsSpellChaseRefresh() const { return spellChaseRefresh; }
+    void ClearSpellChaseRefresh() { spellChaseRefresh = false; }
 
 private:
     WorldSession& session;
+    ForceRebuffState forceRebuff;
     AiObjectContext* context = nullptr;
     Engine const* decisionEngine = nullptr;
     ObjectGuid controllerGuid;
     ObjectGuid targetGuid;
     uint32 restSpellId = 0;
+    bool spellChaseRefresh = false; // map-owned, rechecked against current native victim
+    bool stayActive = false; // map-owned, never a cross-session movement authority
     PlayerbotCorpseLoot::Mailbox lootRequests;
     PlayerbotCorpseLoot::AttemptHistory lootAttempts; // map-owned
     ObjectGuid defeatedCreature; // map-owned, no retained creature pointer
     PlayerbotCorpseLoot::Candidates lootCandidates; // map-owned
     PlayerbotCorpseLoot::Pursuit lootPursuit; // map-owned
+    PlayerbotPartySupport::ReachRequest supportReachRequests; // map-owned, consumed in the same update
 };
 
 #endif

@@ -11,8 +11,16 @@ bool PlayerbotModuleEngineMageCombatEnabled();
 bool PlayerbotModuleEnginePriestHealEnabled();
 bool PlayerbotModuleEnginePartyBuffEnabled();
 bool PlayerbotModuleRestEnabled();
+bool PlayerbotModulePotionsEnabled();
 bool PlayerbotModuleMageArmorEnabled();
 bool PlayerbotModuleLootPassEnabled();
 bool PlayerbotModuleCorpseLootEnabled();
+bool PlayerbotModuleReadyCheckEnabled();
+bool PlayerbotModuleReadyCheckRebuffEnabled();
+bool PlayerbotModuleGroundMountEnabled();
+bool PlayerbotModuleStayEnabled();
+bool PlayerbotModuleStrategyControlEnabled();
+bool PlayerbotModuleStrategyMutationEnabled();
+bool PlayerbotModuleGroupStrategyMutationEnabled();
 
 #endif

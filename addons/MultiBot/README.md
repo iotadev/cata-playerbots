@@ -41,8 +41,10 @@ test from this directory to check registration and channel selection with
 mocked WoW globals. These checks do not validate real frame events or client UI.
 The mock also drives the actual donor response reader through expected-sender
 filtering, encoded offline roster entries, invalid batch rejection and pending
-versus completed connect/disconnect responses. Timer callbacks are captured,
-not executed: this is a protocol check, not a simulation of server timing.
+versus completed connect/disconnect responses. Its strategy case invokes the
+five-second callback and verifies that a preceding aggregate ACK is accepted,
+while a late ACK after client timeout is rejected. Other timers are only captured.
+This is a protocol check, not a simulation of server latency or client rendering.
 
 Before copying this candidate into a disposable Cata client's AddOns/MultiBot,
 preserve any existing addon. No installer is provided and nothing is copied to

@@ -11,6 +11,22 @@
 #include "../src/Ai/Base/PlayerbotGroupStrategy.h"
 #include <cmath>
 
+TEST_CASE("Playerbot caster spacing keeps roster angles and changes formation signature", "[PlayerbotGroup]")
+{
+    for (std::size_t count : {std::size_t(1), std::size_t(4)})
+        for (std::size_t slot = 0; slot < count; ++slot)
+        {
+            auto base = PlayerbotGroup::PositionForSlot(slot, count);
+            auto caster = PlayerbotGroup::WithCasterSpacing(base, true);
+            auto melee = PlayerbotGroup::WithCasterSpacing(base, false);
+            REQUIRE(caster.Distance == 6.0f);
+            REQUIRE(caster.Angle == base.Angle);
+            REQUIRE(caster.Signature != base.Signature);
+            REQUIRE(melee.Distance == base.Distance);
+            REQUIRE(melee.Signature == base.Signature);
+        }
+}
+
 TEST_CASE("Playerbot full-party formation has distinct symmetric slots", "[PlayerbotGroup]")
 {
     auto first = PlayerbotGroup::PositionForSlot(0, 4);

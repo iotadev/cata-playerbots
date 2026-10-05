@@ -34,9 +34,10 @@ FollowPosition PositionFor(Player const& bot, Player const& owner)
 
     std::sort(roster.begin(), roster.end());
     auto it = std::find(roster.begin(), roster.end(), bot.GetGUID().GetCounter());
+    bool caster = bot.getClass() == CLASS_MAGE || bot.getClass() == CLASS_PRIEST;
     if (it == roster.end())
-        return PositionForSlot(0, 1);
-    return PositionForSlot(std::size_t(it - roster.begin()), roster.size());
+        return WithCasterSpacing(PositionForSlot(0, 1), caster);
+    return WithCasterSpacing(PositionForSlot(std::size_t(it - roster.begin()), roster.size()), caster);
 }
 
 bool CanResumeAfterDeath(Player const& bot, Player const& owner)

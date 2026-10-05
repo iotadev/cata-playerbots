@@ -5,6 +5,7 @@
 #include "../src/Bot/Engine/Engine.h"
 #include "../src/Bot/Engine/StateEngines.h"
 #include "../src/Ai/Base/PlayerbotSpecStrategy.h"
+#include "../src/Ai/Base/PlayerbotRoles.h"
 #include "../src/Ai/Class/Priest/PlayerbotPriestDpsStrategy.h"
 #include "../src/Ai/Base/PlayerbotThreatStrategy.h"
 #include <catch2/catch.hpp>
@@ -76,6 +77,16 @@ public:
     std::string const getName() override { return name; }
 private:
     std::string name;
+};
+class RoleStrategy final : public Strategy
+{
+public:
+    RoleStrategy(PlayerbotAI* ai, std::string name, uint32 mask) : Strategy(ai), name(std::move(name)), mask(mask) { }
+    std::string const getName() override { return name; }
+    uint32_t GetType() const override { return mask; }
+private:
+    std::string name;
+    uint32 mask;
 };
 
 class ExclusionStrategy final : public Strategy
@@ -207,6 +218,45 @@ TEST_CASE("Playerbot engine threat policy yields damage to support then resumes 
     REQUIRE(engine.Tick());
     REQUIRE(fixture.counts.primary == 1);
     REQUIRE(fixture.counts.fallback == 1);
+}
+namespace
+{
+class FocusTestAction final : public Action
+{
+public:
+    FocusTestAction(PlayerbotAI* ai, int& count, int& mode) : Action(ai, "primary"), count(count), mode(mode) { }
+    ActionThreatType getThreatType() override { return mode < 2 ? ActionThreatType::Aoe : ActionThreatType::Single; }
+    bool isHealingAction() override { return mode == 1; }
+    bool isDebuffOnAttacker() override { return mode == 3; }
+    bool Execute([[maybe_unused]] Event event) override { ++count; return true; }
+private:
+    int& count;
+    int& mode;
+};
+}
+TEST_CASE("Playerbot engine focus blocks area and attacker debuffs while retaining healing and single target actions", "[playerbot][engine][focus]")
+{
+    Fixture fixture;
+    int mode = 0;
+    fixture.strategies.creators["focus"] = [](PlayerbotAI* ai) { return new PlayerbotThreat::FocusStrategy(ai); };
+    fixture.actions.creators["primary"] = [&](PlayerbotAI* ai) { return new FocusTestAction(ai, fixture.counts.primary, mode); };
+    Engine engine(nullptr, fixture.context);
+    engine.AddStrategy("test");
+    engine.AddStrategy("focus");
+    REQUIRE_FALSE(engine.Tick());
+    REQUIRE(fixture.counts.primary == 0);
+    mode = 1; // Area healing keeps the donor exemption.
+    REQUIRE(engine.Tick());
+    mode = 2;
+    REQUIRE(engine.Tick());
+    REQUIRE(fixture.counts.primary == 2);
+    mode = 3;
+    REQUIRE_FALSE(engine.Tick());
+    REQUIRE(fixture.counts.primary == 2);
+    REQUIRE(engine.RemoveStrategy("focus"));
+    mode = 0;
+    REQUIRE(engine.Tick());
+    REQUIRE(fixture.counts.primary == 3);
 }
 
 TEST_CASE("Playerbot active engine gathers dynamic typed exclusions and clears removed strategies", "[playerbot][engine][target]")
@@ -350,6 +400,30 @@ TEST_CASE("Playerbot state transition discards prerequisites and separates defau
     REQUIRE(engines.Active().HasStrategy("test"));
 }
 
+TEST_CASE("Combat strategy roles remain available in idle and dead states and refresh on replacement", "[playerbot][roles]")
+{
+    Fixture fixture;
+    auto* factory = new NamedObjectContext<Strategy>();
+    factory->creators["tank role"] = [](PlayerbotAI* ai)
+    { return new RoleStrategy(ai, "tank role", STRATEGY_TYPE_COMBAT | STRATEGY_TYPE_TANK | STRATEGY_TYPE_MELEE); };
+    factory->creators["damage role"] = [](PlayerbotAI* ai)
+    { return new RoleStrategy(ai, "damage role", STRATEGY_TYPE_COMBAT | STRATEGY_TYPE_DPS | STRATEGY_TYPE_MELEE); };
+    fixture.strategies.Add(factory);
+    StateEngines engines(nullptr, fixture.context);
+    Engine& combat = engines.Get(StateEngines::State::Combat);
+    combat.AddStrategy("tank role");
+    auto published = [&] { return combat.GetStrategyTypeMask() & PlayerbotRoles::RoleFlags; };
+    REQUIRE(published() & STRATEGY_TYPE_TANK);
+    REQUIRE_FALSE(engines.Active().ContainsStrategy(STRATEGY_TYPE_TANK));
+    engines.Select(StateEngines::State::Dead);
+    REQUIRE(published() & STRATEGY_TYPE_TANK);
+    REQUIRE_FALSE(engines.Active().ContainsStrategy(STRATEGY_TYPE_TANK));
+    combat.RemoveStrategy("tank role");
+    combat.AddStrategy("damage role");
+    REQUIRE_FALSE(published() & STRATEGY_TYPE_TANK);
+    REQUIRE(published() & STRATEGY_TYPE_DPS);
+}
+
 TEST_CASE("Playerbot stop clears continuers but steady state preserves them", "[playerbot][engine][state]")
 {
     Fixture fixture;
@@ -460,4 +534,103 @@ TEST_CASE("Playerbot unchanged spec leaves queued work while a changed route res
     REQUIRE_FALSE(engine.HasStrategy("fury"));
     REQUIRE_FALSE(engine.HasStrategy("tank"));
     REQUIRE_FALSE(PlayerbotSpec::Refresh(engine, CLASS_ROGUE, 0));
+}
+
+TEST_CASE("Playerbot strategy operators apply donor add remove toggle and query", "[playerbot][engine][strategy-control]")
+{
+    Fixture fixture;
+    Engine engine(nullptr, fixture.context);
+    auto result = engine.ChangeStrategies(" +test , ? ", {"test"});
+    REQUIRE(result.Status == Engine::StrategyChangeStatus::Changed);
+    REQUIRE(result.Query);
+    REQUIRE(engine.ContainsStrategy(STRATEGY_TYPE_COMBAT));
+    REQUIRE(engine.ChangeStrategies("~test", {"test"}).Status == Engine::StrategyChangeStatus::Changed);
+    REQUIRE_FALSE(engine.HasStrategy("test"));
+    REQUIRE_FALSE(engine.ContainsStrategy(STRATEGY_TYPE_COMBAT));
+    REQUIRE(engine.ChangeStrategies("-test", {"test"}).Status == Engine::StrategyChangeStatus::Unchanged);
+    REQUIRE(engine.ChangeStrategies("~test", {"test"}).Status == Engine::StrategyChangeStatus::Changed);
+    REQUIRE(engine.HasStrategy("test"));
+}
+
+TEST_CASE("Playerbot invalid strategy batch leaves registrations and continuers intact", "[playerbot][engine][strategy-control]")
+{
+    Fixture fixture;
+    fixture.actions.creators["primary"] = [&fixture](PlayerbotAI* ai)
+    { return new ContinuingAction(ai, fixture.counts.primary); };
+    Engine engine(nullptr, fixture.context);
+    engine.AddStrategy("test");
+    REQUIRE(engine.ExecuteAction("primary") == ACTION_RESULT_OK);
+    for (std::string const command : {"", "-test,+unknown", "-test,,?", "-test,", "!", "+", "?test", "test", "-test,\n?"})
+    {
+        auto result = engine.ChangeStrategies(command, {"test", "unknown"});
+        REQUIRE(result.Status == Engine::StrategyChangeStatus::Rejected);
+        REQUIRE_FALSE(result.Query);
+        REQUIRE(engine.HasStrategy("test"));
+        REQUIRE(engine.QueuedCount() == 1);
+        REQUIRE(engine.GetLastAction() == "primary");
+    }
+}
+
+TEST_CASE("Playerbot strategy query and net unchanged batch preserve queued work", "[playerbot][engine][strategy-control]")
+{
+    Fixture fixture;
+    fixture.actions.creators["primary"] = [&fixture](PlayerbotAI* ai)
+    { return new ContinuingAction(ai, fixture.counts.primary); };
+    Engine engine(nullptr, fixture.context);
+    engine.AddStrategy("test");
+    REQUIRE(engine.ExecuteAction("primary") == ACTION_RESULT_OK);
+    REQUIRE(engine.ChangeStrategies("?", {}).Query);
+    REQUIRE(engine.ChangeStrategies("-test,+test,?", {"test"}).Status == Engine::StrategyChangeStatus::Unchanged);
+    REQUIRE(engine.QueuedCount() == 1);
+    REQUIRE(engine.ChangeStrategies("-test,?", {"test"}).Status == Engine::StrategyChangeStatus::Changed);
+    REQUIRE(engine.QueuedCount() == 0);
+    REQUIRE(engine.GetLastAction().empty());
+}
+
+TEST_CASE("Playerbot strategy sibling replacement cannot bypass caller allowlist", "[playerbot][engine][strategy-control]")
+{
+    Fixture fixture;
+    auto* siblings = new NamedObjectContext<Strategy>(false, true);
+    siblings->creators["tank"] = [](PlayerbotAI* ai)
+    { return new RoleStrategy(ai, "tank", STRATEGY_TYPE_TANK); };
+    siblings->creators["damage"] = [](PlayerbotAI* ai)
+    { return new RoleStrategy(ai, "damage", STRATEGY_TYPE_DPS); };
+    siblings->creators["alias"] = [](PlayerbotAI* ai)
+    { return new NamedStrategy(ai, "damage"); };
+    fixture.strategies.Add(siblings);
+    Engine engine(nullptr, fixture.context);
+    engine.AddStrategy("tank");
+    REQUIRE(engine.ChangeStrategies("-tank", {}).Status == Engine::StrategyChangeStatus::Rejected);
+    REQUIRE(engine.ChangeStrategies("+damage", {"damage"}).Status == Engine::StrategyChangeStatus::Rejected);
+    REQUIRE(engine.ChangeStrategies("+alias", {"tank", "damage", "alias"}).Status == Engine::StrategyChangeStatus::Rejected);
+    REQUIRE(engine.HasStrategy("tank"));
+    REQUIRE(engine.ChangeStrategies("+damage", {"tank", "damage"}).Status == Engine::StrategyChangeStatus::Changed);
+    REQUIRE_FALSE(engine.HasStrategy("tank"));
+    REQUIRE(engine.ContainsStrategy(STRATEGY_TYPE_DPS));
+    REQUIRE_FALSE(engine.ContainsStrategy(STRATEGY_TYPE_TANK));
+}
+
+TEST_CASE("Playerbot strategy changes are isolated to the selected state engine", "[playerbot][engine][strategy-control]")
+{
+    Fixture fixture;
+    StateEngines engines(nullptr, fixture.context);
+    for (auto state : {StateEngines::State::NonCombat, StateEngines::State::Combat, StateEngines::State::Dead})
+        engines.Get(state).AddStrategy("test");
+    REQUIRE(engines.Get(StateEngines::State::Combat).ChangeStrategies("-test", {"test"}).Status == Engine::StrategyChangeStatus::Changed);
+    REQUIRE(engines.Get(StateEngines::State::NonCombat).HasStrategy("test"));
+    REQUIRE(engines.Get(StateEngines::State::Dead).HasStrategy("test"));
+    REQUIRE(engines.Current() == StateEngines::State::NonCombat);
+}
+
+TEST_CASE("Playerbot strategy commands bound bytes and operation count", "[playerbot][engine][strategy-control]")
+{
+    Fixture fixture;
+    Engine engine(nullptr, fixture.context);
+    std::string queries = "?";
+    for (unsigned i = 1; i < 16; ++i) queries += ",?";
+    REQUIRE(engine.ChangeStrategies(queries, {}).Status == Engine::StrategyChangeStatus::Unchanged);
+    REQUIRE(engine.ChangeStrategies(queries + ",?", {}).Status == Engine::StrategyChangeStatus::Rejected);
+    REQUIRE(engine.ChangeStrategies(std::string(249, ' ') + "?", {}).Query);
+    REQUIRE(engine.ChangeStrategies(std::string(250, ' ') + "?", {}).Status == Engine::StrategyChangeStatus::Rejected);
+    REQUIRE(engine.ChangeStrategies("+test::qualifier", {"test::qualifier"}).Status == Engine::StrategyChangeStatus::Rejected);
 }

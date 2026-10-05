@@ -36,24 +36,24 @@ TEST_CASE("Playerbot party cure retains full health and healing cutoff candidate
 {
     std::vector<float> members = {100.0f, 90.0f};
     std::vector<float> attempted;
-    REQUIRE(PlayerbotPriest::TryInPriorityOrder(members, [](float hp) { return hp; },
-        [&](float hp) { attempted.push_back(hp); return hp == 100.0f; }));
-    REQUIRE(attempted == std::vector<float>{90.0f, 100.0f});
+    REQUIRE(PlayerbotPartySupport::TryCandidates(members,
+        [&](float hp) { attempted.push_back(hp); return hp == 90.0f; }));
+    REQUIRE(attempted == std::vector<float>{100.0f, 90.0f});
 }
 TEST_CASE("Playerbot party cure candidate ordering retains stable ties and cast fallback", "[playerbot][cure]")
 {
     struct Member { int Id; float Health; };
     std::vector<Member> members = {{1, 100.0f}, {2, 50.0f}, {3, 100.0f}};
     std::vector<int> attempted;
-    REQUIRE(PlayerbotPriest::TryInPriorityOrder(members, [](Member const& member) { return member.Health; },
+    REQUIRE(PlayerbotPartySupport::TryCandidates(members,
         [&](Member const& member) { attempted.push_back(member.Id); return member.Id == 3; }));
-    REQUIRE(attempted == std::vector<int>{2, 1, 3});
+    REQUIRE(attempted == std::vector<int>{1, 2, 3});
 }
 TEST_CASE("Playerbot empty cure candidate list performs no attempts", "[playerbot][cure]")
 {
     std::vector<float> members;
     unsigned attempts = 0;
-    REQUIRE_FALSE(PlayerbotPriest::TryInPriorityOrder(members, [](float hp) { return hp; },
+    REQUIRE_FALSE(PlayerbotPartySupport::TryCandidates(members,
         [&](float) { ++attempts; return true; }));
     REQUIRE(attempts == 0);
 }

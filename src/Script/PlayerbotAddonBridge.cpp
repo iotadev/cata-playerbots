@@ -6,11 +6,20 @@
 #include "PlayerbotAddonProtocol.h"
 #include "PlayerbotAddonLifecycle.h"
 #include "PlayerbotAddonRoster.h"
+#include "../Bot/Cmd/PlayerbotAddonState.h"
+#include "../Bot/Cmd/PlayerbotAddonMutation.h"
+#include "../Bot/Cmd/PlayerbotStrategyControl.h"
+#include "../Bot/Cmd/PlayerbotStrategyCompletions.h"
+#include "../Bot/Cmd/PlayerbotStrategyPending.h"
+#include "PlayerbotControl.h"
+#include "PlayerbotConfig.h"
+#include "Timer.h"
 #include "PlayerbotManagedControl.h"
 #include "PlayerbotManagedRoster.h"
 #include "PlayerbotRoster.h"
 #include "Chat.h"
 #include "Player.h"
+#include "Group.h"
 #include "World.h"
 #include "WorldPacket.h"
 #include "WorldSession.h"
@@ -26,11 +35,13 @@ struct RequesterGuard
 {
     PlayerbotAddonProtocol::MutationGuard Guard;
     PlayerbotAddonProtocol::RosterQueryGuard RosterGuard;
+    PlayerbotAddonProtocol::RosterQueryGuard StateGuard;
     uint64 LastUsed = 0;
 };
 // World-thread requests only. Account keys and timestamps, never Player/session
 // pointers. Inactive entries expire after the replay retention has elapsed.
 std::map<uint32, RequesterGuard> MutationGuards;
+PlayerbotAddonProtocol::StrategyPending PendingStrategies; // World thread only; no native pointers.
 
 uint64 NowMs()
 {
@@ -78,11 +89,85 @@ uint32 Percent(uint32 value, uint32 maximum)
 {
     return maximum ? uint32(uint64(value) * 100 / maximum) : 0;
 }
+
+Player* CurrentRequester(uint32 guid, PlayerbotStrategyBinding const& binding)
+{
+    WorldSession* session = sWorld->FindSession(binding.Account);
+    Player* player = session ? session->GetPlayer() : nullptr;
+    return session && !session->IsServerOrigin() && !session->isLogingOut() && player && player->IsInWorld() &&
+        player->GetGUID().GetCounter() == guid && binding.SessionMatches(session->GetAccountId(), session->GetPlayerbotRequestIdentity()) ? player : nullptr;
+}
+
+char const* DispatchGroupStrategy(Player& sender, PlayerbotAddonProtocol::StrategyMutation const& mutation, std::string const& command)
+{
+    if (!PlayerbotModuleGroupStrategyMutationEnabled()) return "DISABLED_SCOPE";
+    uint32 account = sender.GetSession()->GetAccountId();
+    if (PendingStrategies.Busy(account)) return "BUSY";
+    PlayerbotStrategyBinding binding;
+    binding.Account = account;
+    binding.Scope = mutation.Scope;
+    binding.Session = sender.GetSession()->GetPlayerbotRequestIdentity();
+    Group* group = sender.GetGroup();
+    if (mutation.Scope != "ALL") binding.Group = group ? group->GetGUID().GetRawValue() : 0;
+    // No group is a valid empty scope, not permission to fall back to ALL.
+    if (mutation.Scope != "ALL" && (!group || (mutation.Scope == "RAID" && !group->isRaidGroup())))
+        return "NO_MATCH";
+    if (mutation.Scope != "ALL" && !group->IsMember(sender.GetGUID())) return "NO_MATCH";
+    std::vector<uint32> bots;
+    for (auto const& entry : PlayerbotRoster::ListActiveFor(sender))
+    {
+        WorldSession* session = sWorld->FindServerOriginPlayerbot(entry.Guid);
+        Player* bot = session ? session->GetPlayer() : nullptr;
+        if (!bot || (session->GetServerOriginFollowTargetGuidLow() != sender.GetGUID().GetCounter() &&
+            session->GetServerOriginPartyControllerGuidLow() != sender.GetGUID().GetCounter())) continue;
+        Group* botGroup = bot->GetGroup();
+        if (mutation.Scope != "ALL" && (!botGroup || !botGroup->IsMember(entry.Guid))) continue;
+        if (!binding.GroupMatches(group ? group->GetGUID().GetRawValue() : 0,
+            botGroup ? botGroup->GetGUID().GetRawValue() : 0, group && group->isRaidGroup())) continue;
+        if (bots.size() >= 128) return "BOT_LIMIT"; // Freeze/preflight before any post; no partial over-limit execution.
+        bots.push_back(entry.Guid.GetCounter());
+    }
+    uint32 now = getMSTime();
+    auto generation = PendingStrategies.Begin(sender.GetGUID().GetCounter(), binding, mutation, bots, now);
+    if (!generation) return "BATCH_LIMIT";
+    binding = PendingStrategies.Entries().at(*generation).Binding;
+    for (uint32 bot : bots)
+    {
+        auto result = PlayerbotControl::DispatchStrategy(sender, ObjectGuid::Create<HighGuid::Player>(bot),
+            command, mutation.Token, {}, *generation, binding);
+        if (result != PlayerbotControlResult::Queued)
+            PendingStrategies.Record({*generation, sender.GetGUID().GetCounter(), bot, mutation.Token, mutation.State,
+                PlayerbotAddonProtocol::StrategyBatch::Stage::AdmissionRejected, false}, now);
+    }
+    return nullptr; // Only the world pump emits the single aggregate completion ACK.
+}
 }
 
 void SetPlayerbotAddonBridgeEnabled(bool enabled)
 {
     BridgeEnabled = enabled;
+}
+
+void UpdatePlayerbotAddonStrategyBatches()
+{
+    uint32 now = getMSTime();
+    std::vector<uint64> abandoned;
+    for (auto const& [id, entry] : PendingStrategies.Entries())
+    {
+        Player* requester = CurrentRequester(entry.Requester, entry.Binding);
+        if (!requester || !BridgeEnabled) { abandoned.push_back(id); continue; }
+        Group* group = requester->GetGroup();
+        if (!PlayerbotModuleStrategyControlEnabled() || !PlayerbotModuleStrategyMutationEnabled() ||
+            !PlayerbotModuleGroupStrategyMutationEnabled() || requester->IsBeingTeleported() ||
+            !entry.Binding.GroupMatches(group ? group->GetGUID().GetRawValue() : 0,
+                group ? group->GetGUID().GetRawValue() : 0, group && group->isRaidGroup()))
+            PendingStrategies.Cancel(id); // Stop unexecuted work; executed work is not rolled back.
+    }
+    for (uint64 id : abandoned) PendingStrategies.Abandon(id);
+    for (auto const& result : PlayerbotAddonProtocol::GroupStrategyCompletions().Drain()) PendingStrategies.Record(result, now);
+    for (auto const& reply : PendingStrategies.Poll(now))
+        if (Player* requester = CurrentRequester(reply.Requester, reply.Binding))
+            if (BridgeEnabled && !requester->IsBeingTeleported()) Reply(*requester, reply.Message);
 }
 
 bool HandlePlayerbotAddonMessage(Player& sender, std::string const& prefix, std::string const& message)
@@ -100,13 +185,80 @@ bool HandlePlayerbotAddonMessage(Player& sender, std::string const& prefix, std:
             // requester. Every roster/mutation/poll still rechecks access.
             {
                 std::string capabilities = PlayerbotAddonProtocol::ManagedCapabilities(
-                    PlayerbotManagedRoster::IsPlayerControlEnabled());
+                    PlayerbotManagedRoster::IsPlayerControlEnabled(), PlayerbotModuleStrategyControlEnabled(), PlayerbotModuleStrategyMutationEnabled());
                 Reply(sender, capabilities.empty() ? "CAPS" : "CAPS~" + capabilities);
             }
             break;
         case PlayerbotAddonProtocol::Request::Ping:
             Reply(sender, "PONG~" + request.Payload);
             break;
+        case PlayerbotAddonProtocol::Request::Strategy:
+        {
+            auto mutation = PlayerbotAddonProtocol::ParseStrategyMutation(request.Payload);
+            if (!mutation) { Reply(sender, "ERR~RUN~STRATEGY~~BAD_FIELDS"); break; }
+            auto ack = [&](unsigned matched, char const* reason)
+            { Reply(sender, PlayerbotAddonProtocol::StrategyAck(*mutation, matched, 0, matched, reason)); };
+            // Validate the reply envelope before admitting a mutation. Never
+            // replace a too-long target with an identity the client did not request.
+            if (PlayerbotAddonProtocol::StrategyAck(*mutation, 1, 0, 1, "UNSUPPORTED_STRATEGY").empty())
+            { Reply(sender, "ERR~RUN~STRATEGY~~ACK_TOO_LONG"); break; }
+            if (!PlayerbotModuleStrategyMutationEnabled()) { ack(0, "DISABLED"); break; }
+            if (char const* rejection = AdmitMutation(sender, mutation->Token)) { ack(0, rejection); break; }
+            if (sender.IsBeingTeleported() || sender.GetSession()->isLogingOut()) { ack(0, "BUSY"); break; }
+            std::string command = (mutation->State == "C" ? "co " : "nc ") + mutation->Changes;
+            auto parsed = PlayerbotStrategyControl::Parse(command);
+            if (mutation->Scope != "BOT")
+            {
+                if (!parsed || !parsed->Mutation) { ack(0, "UNSUPPORTED_STRATEGY"); break; }
+                if (char const* reason = DispatchGroupStrategy(sender, *mutation, command)) ack(0, reason);
+                break;
+            }
+            ObjectGuid guid;
+            for (auto const& entry : PlayerbotRoster::ListActiveFor(sender))
+                if (entry.Name == mutation->Target) { guid = entry.Guid; break; }
+            if (guid.IsEmpty()) { ack(0, "NO_BOT"); break; }
+            if (!parsed || !parsed->Mutation) { ack(1, "UNSUPPORTED_STRATEGY"); break; }
+            auto result = PlayerbotControl::DispatchStrategy(sender, guid, command, mutation->Token, mutation->Target);
+            switch (result)
+            {
+                case PlayerbotControlResult::Queued: break; // Completion ACK comes after map execution/snapshot publication.
+                case PlayerbotControlResult::Unauthorized: ack(1, "FORBIDDEN"); break;
+                case PlayerbotControlResult::NotFollowing: ack(1, "NOT_FOLLOWING"); break;
+                case PlayerbotControlResult::Busy: ack(1, "BUSY"); break;
+                case PlayerbotControlResult::BotUnavailable: ack(1, "NO_BOT"); break;
+                case PlayerbotControlResult::InvalidCommand: ack(1, "UNSUPPORTED_STRATEGY"); break;
+            }
+            break;
+        }
+        case PlayerbotAddonProtocol::Request::State:
+        case PlayerbotAddonProtocol::Request::States:
+        {
+            auto abort = [&](char const* reason) { Reply(sender, "STATE_ABORT~" + request.Payload + "~~" + reason); };
+            if (!PlayerbotModuleStrategyControlEnabled()) { abort("DISABLED"); break; }
+            RequesterGuard* guard = GetRequesterGuard(sender, NowMs());
+            if (!guard || !guard->StateGuard.Admit(NowMs())) { abort("RATE_LIMIT"); break; }
+            bool global = request.Kind == PlayerbotAddonProtocol::Request::States;
+            std::vector<PlayerbotAddonProtocol::StateRow> rows;
+            bool failed = false;
+            for (auto const& entry : PlayerbotRoster::ListActiveFor(sender))
+            {
+                if (!global && entry.Name != request.BotName) continue;
+                WorldSession* session = sWorld->FindServerOriginPlayerbot(entry.Guid);
+                Player* bot = session ? session->GetPlayer() : nullptr;
+                auto snapshot = session ? session->GetPlayerbotStrategySnapshot() : nullptr;
+                // Roster reauthorizes this request. Snapshot identity and freshness
+                // prevent exposing another controller's or an old session's state.
+                if (!bot || bot->IsBeingTeleported() || !snapshot ||
+                    !PlayerbotAddonProtocol::SnapshotFresh(*snapshot, entry.Guid.GetCounter(),
+                        sender.CanBeGameMaster() ? snapshot->Controller : sender.GetGUID().GetCounter(), getMSTime()))
+                { failed = true; break; }
+                rows.push_back({entry.Name, snapshot->Combat, snapshot->NonCombat});
+            }
+            if (failed) { abort("STATE_NOT_READY"); break; }
+            if (!global && rows.empty()) { abort("NO_BOT"); break; }
+            for (auto const& frame : PlayerbotAddonProtocol::FrameStrategyStates(request.Payload, rows, global)) Reply(sender, frame);
+            break;
+        }
         case PlayerbotAddonProtocol::Request::AltRoster:
         {
             uint64 now = NowMs();

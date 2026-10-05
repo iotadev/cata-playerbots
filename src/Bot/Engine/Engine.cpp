@@ -134,6 +134,70 @@ std::vector<std::string> Engine::GetStrategies() const
     return names;
 }
 
+Engine::StrategyChangeResult Engine::ChangeStrategies(std::string const& command,
+                                                      std::set<std::string> const& mutableStrategies)
+{
+    // Donor Engine::ChangeStrategy / ChangeStrategyAction at 037c01418b5d01506917a3db9b44fd56ac5f965c.
+    // Validate and stage the whole bounded request before changing live queues.
+    // Deliberately reject aliases, qualified names and reset/persistence operators.
+    if (command.empty() || command.size() > 250)
+        return {};
+    auto proposed = strategies;
+    auto supported = context.GetSupportedStrategies();
+    bool query = false;
+    size_t start = 0;
+    unsigned operations = 0;
+    while (start < command.size())
+    {
+        if (++operations > 16)
+            return {};
+        size_t end = command.find(',', start);
+        if (end == std::string::npos) end = command.size();
+        std::string token = command.substr(start, end - start);
+        size_t first = token.find_first_not_of(" \t");
+        size_t last = token.find_last_not_of(" \t");
+        if (first == std::string::npos)
+            return {};
+        token = token.substr(first, last - first + 1);
+        if (token == "?")
+            query = true;
+        else
+        {
+            char operation = token[0];
+            if ((operation != '+' && operation != '-' && operation != '~') || token.size() == 1)
+                return {};
+            std::string name = token.substr(1);
+            if (!mutableStrategies.count(name) || !supported.count(name))
+                return {};
+            Strategy* strategy = context.GetStrategy(name);
+            if (!strategy || strategy->getName() != name)
+                return {};
+            if (operation == '-' || (operation == '~' && proposed.count(name)))
+                proposed.erase(name);
+            else
+            {
+                for (auto const& sibling : context.GetSiblingStrategy(name))
+                {
+                    // Adding an allowed route cannot silently remove a protected route.
+                    if (proposed.count(sibling) && !mutableStrategies.count(sibling))
+                        return {};
+                    proposed.erase(sibling);
+                }
+                proposed[name] = strategy;
+            }
+        }
+        if (end == command.size()) break;
+        start = end + 1;
+        if (start == command.size()) return {}; // trailing empty token
+    }
+    if (proposed == strategies)
+        return {StrategyChangeStatus::Unchanged, query};
+    strategies = std::move(proposed);
+    CancelPendingActions();
+    Init();
+    return {StrategyChangeStatus::Changed, query};
+}
+
 ActionNode* Engine::CreateActionNode(std::string const& name)
 {
     if (ActionNode* node = actionNodeFactories.GetContextObject(name, botAI))

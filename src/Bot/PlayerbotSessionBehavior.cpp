@@ -3,17 +3,26 @@
  * Released under GNU GPL v2 or any later version.
  */
 #include "PlayerbotSessionBehavior.h"
+#include "Cmd/PlayerbotAddonMutation.h"
+#include "Cmd/PlayerbotStrategyCompletions.h"
 #include "PlayerbotDevFixture.h"
 #include "../Ai/Base/PlayerbotRestStrategy.h"
 #include "../Ai/Base/PlayerbotSpecStrategy.h"
 #include "../Ai/Base/PlayerbotTargetSelection.h"
+#include "../Ai/Base/PlayerbotCombatMovement.h"
+#include "../Ai/Base/PlayerbotPartyBuffStrategy.h"
+#include "../Ai/Base/PlayerbotReadyCheckSupplies.h"
+#include "../Ai/Base/PlayerbotRoles.h"
+#include "Chat.h"
 #include "WorldSession.h"
 #include "Creature.h"
+#include "GameClient.h"
 #include "DBCStores.h"
 #include "Group.h"
 #include "Log.h"
 #include "Map.h"
 #include "MotionMaster.h"
+#include "MovementPackets.h"
 #include "ObjectAccessor.h"
 #include "ObjectMgr.h"
 #include "PartyPackets.h"
@@ -35,7 +44,7 @@ namespace
 bool PassiveEngineEnabled(PlayerbotAI const& ai)
 {
     Player* bot = ai.GetBot();
-    return PlayerbotModuleRestEnabled() || PlayerbotModuleMageArmorEnabled() || PlayerbotModuleCorpseLootEnabled() ||
+    return ai.Rebuff().IsPending(getMSTime()) || PlayerbotModuleRestEnabled() || PlayerbotModuleMageArmorEnabled() || PlayerbotModuleCorpseLootEnabled() ||
         (bot && bot->getClass() == CLASS_MAGE && PlayerbotModuleEngineMageCombatEnabled());
 }
 }
@@ -52,7 +61,12 @@ bool PlayerbotModuleSupportsClass(uint8 playerClass)
 }
 void PlayerbotSessionBehavior::UpdateMap(uint32 diff)
 {
+    std::string strategyAck;
+    uint32 strategyAckRequester = 0;
+    std::optional<PlayerbotAddonProtocol::StrategyBatch::Completion> groupCompletion;
     _engineTickedThisUpdate = false;
+    _ai.SupportReachRequests().Enable(false); // Intent never survives an update/control boundary.
+    CompleteNearTeleport();
     if (Player* bot = _ai.GetBot()) PlayerbotDevFixture::Process(*bot);
     // Native group roll creation consumes this preference. Do not inspect or
     // mutate Group/Roll objects here, or fabricate a world-thread loot packet.
@@ -95,20 +109,30 @@ void PlayerbotSessionBehavior::UpdateMap(uint32 diff)
         {
             Engine& combat = _stateEngines->Get(StateEngines::State::Combat);
             PlayerbotSpec::Refresh(combat, bot->getClass(), bot->GetPrimaryTalentTree(bot->GetActiveSpec()));
+            if (!_combatDefaultsInitialized || !PlayerbotModuleStrategyControlEnabled())
+            {
+                PlayerbotStrategyControl::RestoreCombatDefaults(combat,
+                    bot->getClass() == CLASS_MAGE || bot->getClass() == CLASS_PRIEST);
+                _combatDefaultsInitialized = true;
+            }
             if (bot->getClass() == CLASS_MAGE || bot->getClass() == CLASS_PRIEST)
             {
-                if (!combat.HasStrategy("threat")) combat.AddStrategy("threat");
                 if (!combat.HasStrategy("cure")) combat.AddStrategy("cure");
             }
             if (bot->getClass() == CLASS_PRIEST && !combat.HasStrategy("healer dps"))
                 combat.AddStrategy("healer dps");
+            _strategyRoleMask.store(combat.GetStrategyTypeMask() & PlayerbotRoles::RoleFlags, std::memory_order_relaxed);
         }
 
     if (_stateEngines)
     {
         Engine& noncombat = _stateEngines->Get(StateEngines::State::NonCombat);
-        if (!noncombat.HasStrategy("food")) noncombat.AddStrategy("food");
-        if (!noncombat.HasStrategy("loot")) noncombat.AddStrategy("loot");
+        if (!_noncombatDefaultsInitialized || !PlayerbotModuleStrategyControlEnabled())
+        {
+            if (!noncombat.HasStrategy("food")) noncombat.AddStrategy("food");
+            if (!noncombat.HasStrategy("loot")) noncombat.AddStrategy("loot");
+            _noncombatDefaultsInitialized = true;
+        }
         SelectEngineState();
     }
     UpdateServerOriginParty();
@@ -121,9 +145,137 @@ void PlayerbotSessionBehavior::UpdateMap(uint32 diff)
     }
     UpdateServerOriginMovement(diff);
     UpdateServerOriginInstanceJoin();
+    if (auto request = _strategyCommands.Take(getMSTime()))
+    {
+        Player* bot = _ai.GetBot();
+        Player* requester = bot && bot->IsInWorld() ? bot->GetMap()->GetPlayer(
+            ObjectGuid::Create<HighGuid::Player>(request->Requester)) : nullptr;
+        Player* controller = _ai.GetController();
+        bool addon = !request->Token.empty();
+        bool succeeded = false;
+        Group* requesterGroup = requester ? requester->GetGroup() : nullptr;
+        Group* botGroup = bot ? bot->GetGroup() : nullptr;
+        bool nativeMembers = !request->Batch || request->Binding.Scope == "ALL" ||
+            (requesterGroup && botGroup && requesterGroup->IsMember(requester->GetGUID()) && botGroup->IsMember(bot->GetGUID()));
+        bool bindingValid = !request->Batch || (PlayerbotModuleGroupStrategyMutationEnabled() && request->Binding.Valid() &&
+            requester && requester->GetSession() && !requester->GetSession()->isLogingOut() &&
+            request->Binding.SessionMatches(requester->GetSession()->GetAccountId(), requester->GetSession()->GetPlayerbotRequestIdentity()) &&
+            nativeMembers && request->Binding.GroupMatches(requesterGroup ? requesterGroup->GetGUID().GetRawValue() : 0,
+                botGroup ? botGroup->GetGUID().GetRawValue() : 0, requesterGroup && requesterGroup->isRaidGroup()));
+        char const* reason = addon && !PlayerbotModuleStrategyMutationEnabled() ? "DISABLED" : "FORBIDDEN";
+        // Resolve all native objects anew at execution; never borrow another session's engine.
+        if (bindingValid && PlayerbotModuleStrategyControlEnabled() && (!addon || PlayerbotModuleStrategyMutationEnabled()) && _stateEngines && !_engineTransferSuspended &&
+            requester && requester->GetSession() && !requester->GetSession()->IsServerOrigin() &&
+            !requester->IsBeingTeleported() && controller && controller->GetGUID() == requester->GetGUID() &&
+            bot->IsInPhase(requester) && PlayerbotSecurity(*bot).CheckLevelFor(PLAYERBOT_SECURITY_ALLOW_ALL, *requester))
+        {
+            auto const& command = request->Value;
+            bool busy = command.Mutation && (!bot->IsAlive() || bot->IsInCombat() || IsAttacking() ||
+                bot->IsNonMeleeSpellCast(false) || _ai.GetRestSpellId() || _ai.LootRequests().Pending() ||
+                _ai.Rebuff().IsPending(getMSTime()) || !_serverOriginSupportReachGuid.IsEmpty() ||
+                PlayerbotTargetSelection::HasNearbyPartyCombat(*bot, *requester));
+            ChatHandler reply(requester->GetSession());
+            if (busy)
+            {
+                reason = "BUSY";
+                if (!addon) reply.PSendSysMessage("Playerbot %s: strategy change rejected while busy; retry when idle.", bot->GetName().c_str());
+            }
+            else
+            {
+                auto state = command.State == PlayerbotStrategyControl::Scope::Combat ? StateEngines::State::Combat :
+                    command.State == PlayerbotStrategyControl::Scope::Dead ? StateEngines::State::Dead : StateEngines::State::NonCombat;
+                Engine& selected = _stateEngines->Get(state);
+                auto result = selected.ChangeStrategies(command.Param, PlayerbotStrategyControl::MutableStrategies(command.State));
+                if (result.Status == Engine::StrategyChangeStatus::Rejected)
+                {
+                    reason = "UNSUPPORTED_STRATEGY";
+                    if (!addon) reply.PSendSysMessage("Playerbot %s: unsupported strategy request rejected.", bot->GetName().c_str());
+                }
+                else
+                {
+                    succeeded = true;
+                    reason = "OK";
+                    char const* scope = command.State == PlayerbotStrategyControl::Scope::Combat ? "co" :
+                        command.State == PlayerbotStrategyControl::Scope::Dead ? "de" : "nc";
+                    if (!addon) reply.PSendSysMessage("Playerbot %s: %s strategies %s.", bot->GetName().c_str(), scope,
+                        result.Status == Engine::StrategyChangeStatus::Changed ? "changed" : "unchanged");
+                    if (result.Query && !addon)
+                    {
+                        std::string names;
+                        for (auto const& name : selected.GetStrategies()) { if (!names.empty()) names += ", "; names += name; }
+                        reply.PSendSysMessage("Playerbot %s %s: %s", bot->GetName().c_str(), scope, names.empty() ? "(none)" : names.c_str());
+                    }
+                }
+            }
+        }
+        else if (!addon && requester && requester->GetSession() && !requester->GetSession()->IsServerOrigin())
+            ChatHandler(requester->GetSession()).SendSysMessage("Playerbot strategy request rejected: controller, authority or live state changed.");
+        if (addon)
+        {
+            if (request->Batch)
+                groupCompletion = PlayerbotAddonProtocol::StrategyBatch::Completion{request->Batch, request->Requester,
+                    bot ? bot->GetGUID().GetCounter() : 0, request->Token,
+                    request->Value.State == PlayerbotStrategyControl::Scope::Combat ? "C" : "N",
+                    PlayerbotAddonProtocol::StrategyBatch::Stage::Executed, succeeded};
+            else
+            {
+                PlayerbotAddonProtocol::StrategyMutation response{"BOT", request->Target, request->Token,
+                    request->Value.State == PlayerbotStrategyControl::Scope::Combat ? "C" : "N", {}};
+                strategyAck = PlayerbotAddonProtocol::StrategyAck(response, 1, succeeded ? 1 : 0, succeeded ? 0 : 1, reason);
+                strategyAckRequester = request->Requester;
+            }
+        }
+    }
+    if (auto command = _rangeCommands.Take(getMSTime()))
+        if (_engine && !_engineTransferSuspended)
+            _engine->ExecuteAction("range", Event("chat", command->Param,
+                ObjectGuid::Create<HighGuid::Player>(command->Requester)));
+    if (auto request = _rebuffCommands.Take(getMSTime()))
+    {
+        Player* bot = _ai.GetBot();
+        Player* requester = bot && bot->IsInWorld() ? bot->GetMap()->GetPlayer(ObjectGuid::Create<HighGuid::Player>(request->Requester)) : nullptr;
+        if (_engine && !_engineTransferSuspended && bot && bot->IsAlive() && requester &&
+            !requester->IsBeingTeleported() && _ai.GetController() && PlayerbotModuleEnginePartyBuffEnabled() &&
+            (bot->getClass() == CLASS_MAGE || bot->getClass() == CLASS_PRIEST) &&
+            PlayerbotSecurity(*bot).CheckLevelFor(PLAYERBOT_SECURITY_ALLOW_ALL, *requester))
+        {
+            _ai.Rebuff().Begin(getMSTime());
+            _restCheckTimer = 0;
+            ChatHandler(requester->GetSession()).PSendSysMessage("Playerbot %s: rebuff pass started.", bot->GetName().c_str());
+        }
+    }
     UpdateServerOriginCombat(diff);
     SelectEngineState();
-    if (PassiveEngineEnabled(_ai))
+    if (auto request = _readyChecks.TakeRequest(getMSTime()))
+    {
+        CancelDeferredReadyCheck();
+        Player* bot = _ai.GetBot();
+        Player* initiator = bot && bot->IsInWorld() ?
+            bot->GetMap()->GetPlayer(ObjectGuid::Create<HighGuid::Player>(request->Initiator)) : nullptr;
+        Player* controller = _ai.GetController();
+        uint32 buff = bot && bot->getClass() == CLASS_MAGE ? PlayerbotPartyBuff::Brilliance.SpellId :
+            bot && bot->getClass() == CLASS_PRIEST ? PlayerbotPartyBuff::Fortitude.SpellId : 0;
+        if (PlayerbotModuleReadyCheckEnabled() && PlayerbotModuleReadyCheckRebuffEnabled() && PlayerbotModuleEnginePartyBuffEnabled() &&
+            _engine && !_engineTransferSuspended && bot && bot->IsAlive() && !bot->IsInCombat() && !IsAttacking() &&
+            !bot->IsBeingTeleported() && !_serverOriginInstanceJoinRequest.load() && controller && initiator &&
+            controller->IsAlive() && controller->IsInWorld() && !controller->IsBeingTeleported() &&
+            !controller->IsInCombat() && !initiator->IsInCombat() &&
+            controller->GetGroup() == bot->GetGroup() &&
+            !initiator->IsBeingTeleported() && bot->GetGroup() && bot->GetGroup() == initiator->GetGroup() &&
+            uint64(bot->GetGroup()->GetGUID()) == request->Group && buff && bot->HasSpell(buff) &&
+            _readyChecks.IsCurrent(*request, getMSTime()) &&
+            PlayerbotSecurity(*bot).CheckLevelFor(PLAYERBOT_SECURITY_ALLOW_ALL, *initiator))
+        {
+            bool ownsPass = !_ai.Rebuff().IsPending(getMSTime());
+            if (ownsPass) _ai.Rebuff().Begin(getMSTime()); // Preserve an existing manual pass.
+            _deferredReadyCheck = PlayerbotReadyCheck::DeferredPass{*request, uint64(controller->GetGUID()),
+                _ai.Rebuff().Serial(), ownsPass};
+            _restCheckTimer = 0;
+        }
+        else
+            _readyChecks.Complete(*request, EvaluateReadyCheck(*request), getMSTime());
+    }
+    if (PassiveEngineEnabled(_ai) || _ai.IsStaying())
     {
         if (_restCheckTimer > diff)
             _restCheckTimer -= diff;
@@ -131,11 +283,139 @@ void PlayerbotSessionBehavior::UpdateMap(uint32 diff)
         {
             _restCheckTimer = 2000;
             Player* bot = _ai.GetBot();
-            if (bot && bot->IsAlive() && !bot->IsInCombat() && !_serverOriginAttacking.load())
+            if (bot && bot->IsAlive() && !bot->IsInCombat() && !_serverOriginAttacking.load() &&
+                _serverOriginSupportReachGuid.IsEmpty())
                 TickEngine();
         }
     }
+    UpdateDeferredReadyCheck();
+    Player* snapshotBot = _ai.GetBot();
+    Player* snapshotController = _ai.GetController();
+    if (PlayerbotModuleStrategyControlEnabled() && _stateEngines && !_engineTransferSuspended &&
+        snapshotBot && snapshotBot->IsInWorld() && !snapshotBot->IsBeingTeleported())
+    {
+        uint32 botGuid = snapshotBot->GetGUID().GetCounter();
+        uint32 controllerGuid = snapshotController ? snapshotController->GetGUID().GetCounter() : 0;
+        uint32 created = getMSTime();
+        auto combat = _stateEngines->Get(StateEngines::State::Combat).GetStrategies();
+        auto noncombat = _stateEngines->Get(StateEngines::State::NonCombat).GetStrategies();
+        auto prior = GetStrategySnapshot();
+        if (!prior || prior->Bot != botGuid || prior->Controller != controllerGuid ||
+            prior->Combat != combat || prior->NonCombat != noncombat || uint32(created - prior->Created) >= 1000)
+        {
+            auto snapshot = std::make_shared<PlayerbotStrategySnapshot>();
+            snapshot->Bot = botGuid;
+            snapshot->Controller = controllerGuid;
+            snapshot->Created = created;
+            snapshot->Combat = std::move(combat);
+            snapshot->NonCombat = std::move(noncombat);
+            std::atomic_store(&_strategySnapshot, std::shared_ptr<PlayerbotStrategySnapshot const>(std::move(snapshot)));
+        }
+    }
+    else
+        std::atomic_store(&_strategySnapshot, std::shared_ptr<PlayerbotStrategySnapshot const>{});
+    // Publish the changed read model before acknowledging it to a client that
+    // may immediately request STATE. Resolve the recipient again; retain no Player*.
+    if (groupCompletion)
+        PlayerbotAddonProtocol::GroupStrategyCompletions().Submit(std::move(*groupCompletion));
+    if (!strategyAck.empty() && snapshotBot && snapshotBot->IsInWorld())
+        if (Player* recipient = snapshotBot->GetMap()->GetPlayer(ObjectGuid::Create<HighGuid::Player>(strategyAckRequester)))
+            if (recipient->GetSession() && !recipient->GetSession()->IsServerOrigin())
+            {
+                WorldPacket packet;
+                ChatHandler::BuildChatPacket(packet, CHAT_MSG_WHISPER, LANG_ADDON, recipient, recipient,
+                    strategyAck, 0U, "", DEFAULT_LOCALE, "MBOT");
+                recipient->SendDirectMessage(&packet);
+            }
 }
+bool PlayerbotSessionBehavior::EvaluateReadyCheck(PlayerbotReadyCheck::Request const& request)
+{
+    Player* bot = _ai.GetBot();
+    if (!bot || !PlayerbotModuleReadyCheckEnabled()) return false;
+    Player* initiator = bot->IsInWorld() ? bot->GetMap()->GetPlayer(
+        ObjectGuid::Create<HighGuid::Player>(request.Initiator)) : nullptr;
+    bool initiatorNearby = initiator && !initiator->IsBeingTeleported() && bot->GetDistance(initiator) <= 100.0f;
+    float mana = bot->GetMaxPower(POWER_MANA) > 0 ?
+        100.0f * bot->GetPower(POWER_MANA) / bot->GetMaxPower(POWER_MANA) : 0.0f;
+    auto supplies = PlayerbotReadyCheck::CarriedSupplies(*bot);
+    bool usesMana = bot->GetPowerType() == POWER_MANA;
+    bool partyCombat = initiator && PlayerbotTargetSelection::HasNearbyPartyCombat(*bot, *initiator);
+    bool ready = PlayerbotReadyCheck::BasicReadiness(bot->IsInWorld(), bot->IsAlive(), bot->IsInCombat() || IsAttacking() || partyCombat,
+        bot->IsBeingTeleported() || _engineTransferSuspended || _serverOriginInstanceJoinRequest.load(),
+        bot->IsNonMeleeSpellCast(false) || _ai.Rebuff().IsPending(getMSTime()), bot->GetHealthPct(),
+        usesMana, mana, initiatorNearby) && supplies.Ready(usesMana);
+    if (initiator)
+        ChatHandler(initiator->GetSession()).PSendSysMessage(
+            "Playerbot %s readiness snapshot: %s; food %u, drink %u, healing potions %u, mana potions %u.",
+            bot->GetName().c_str(), ready ? "ready" : "not ready", supplies.Food, supplies.Drink,
+            supplies.HealingPotion, supplies.ManaPotion);
+    return ready;
+}
+void PlayerbotSessionBehavior::CancelDeferredReadyCheck()
+{
+    if (_deferredReadyCheck && _deferredReadyCheck->OwnsPass &&
+        _ai.Rebuff().Serial() == _deferredReadyCheck->RebuffSerial)
+        _ai.Rebuff().End(); // Never cancel a replacement manual pass.
+    _deferredReadyCheck.reset();
+}
+void PlayerbotSessionBehavior::UpdateDeferredReadyCheck()
+{
+    if (!_deferredReadyCheck) return;
+    auto pass = *_deferredReadyCheck;
+    Player* bot = _ai.GetBot();
+    Player* controller = _ai.GetController();
+    auto result = PlayerbotReadyCheck::PollDeferred(pass.Identity, getMSTime(),
+        PlayerbotModuleReadyCheckEnabled() && _readyChecks.IsCurrent(pass.Identity, getMSTime()),
+        controller && uint64(controller->GetGUID()) == pass.Controller,
+        _ai.Rebuff().Serial() == pass.RebuffSerial,
+        PlayerbotModuleReadyCheckRebuffEnabled() && PlayerbotModuleEnginePartyBuffEnabled() &&
+            bot && controller && controller->IsAlive() && controller->IsInWorld() &&
+            !controller->IsBeingTeleported() && !controller->IsInCombat() && controller->GetGroup() == bot->GetGroup() &&
+            bot->IsInWorld() && bot->IsAlive() && !bot->IsInCombat() && !IsAttacking() &&
+            !bot->IsBeingTeleported() && !_engineTransferSuspended && !_serverOriginInstanceJoinRequest.load(),
+        _ai.Rebuff().IsPending(getMSTime()), _ai.Rebuff().Completed());
+    if (result == PlayerbotReadyCheck::DeferredResult::Wait) return;
+    bool ready = result == PlayerbotReadyCheck::DeferredResult::Evaluate && EvaluateReadyCheck(pass.Identity);
+    CancelDeferredReadyCheck();
+    if (result != PlayerbotReadyCheck::DeferredResult::Cancel)
+        _readyChecks.Complete(pass.Identity, ready, getMSTime());
+    else
+        _readyChecks.Cancel(pass.Identity);
+}
+void PlayerbotSessionBehavior::CompleteNearTeleport()
+{
+    Player* bot = _ai.GetBot();
+    if (!bot || !bot->IsInWorld() || !bot->IsBeingTeleportedNear() || bot->IsHasDelayedTeleport())
+        return;
+    ReleaseStay(); // Invalidate before native ACK clears the near-transfer semaphore.
+    _strategyCommands.Cancel();
+    GameClient* client = _session.GetGameClient();
+    if (!client || !client->IsAllowedToMove(bot->GetGUID()) ||
+        (client->GetActivelyMovedUnit() && client->GetActivelyMovedUnit() != bot))
+        return; // Never seize a revoked/charmed/vehicle mover to acknowledge self.
+    if (!client->GetActivelyMovedUnit())
+    {
+        WorldPackets::Movement::SetActiveMover active{WorldPacket(CMSG_SET_ACTIVE_MOVER)};
+        active.ActiveMover = bot->GetGUID();
+        _session.HandleSetActiveMoverOpcode(active); // Native allowed-mover validation.
+    }
+    WorldPackets::Movement::MoveTeleportAck ack{WorldPacket(MSG_MOVE_TELEPORT_ACK)};
+    ack.MoverGUID = bot->GetGUID();
+    _session.HandleMoveTeleportAck(ack);
+    if (bot->IsBeingTeleported() || !bot->IsInWorld())
+        return;
+    if (_stateEngines) _stateEngines->CancelPendingActions();
+    _serverOriginSupportReachGuid.Clear();
+    _serverOriginFormationSignature = 0;
+    _serverOriginPathCatchUpActive = false;
+    _serverOriginPathRefreshMs = 0;
+    bot->GetMotionMaster()->Clear(MOTION_SLOT_ACTIVE);
+    bot->StopMoving();
+    uint8 expected = 0;
+    _serverOriginCombatRequest.compare_exchange_strong(expected, 2);
+    TC_LOG_INFO("server", "PB-TRANSFER: %s completed native same-map teleport", bot->GetName().c_str());
+}
+
 void PlayerbotSessionBehavior::TickEngine(bool inCombat)
 {
     SelectEngineState();
@@ -143,7 +423,19 @@ void PlayerbotSessionBehavior::TickEngine(bool inCombat)
         (!PassiveEngineEnabled(_ai) || !_engineTickedThisUpdate))
     {
         _engineTickedThisUpdate = true;
-        _engine->Tick(false, false, inCombat || _stateEngines->Current() == StateEngines::State::Combat);
+        auto& rebuff = _ai.Rebuff();
+        uint32 now = getMSTime();
+        if (!rebuff.IsPending(now)) rebuff.End();
+        rebuff.BeginCycle();
+        bool combat = inCombat || _stateEngines->Current() == StateEngines::State::Combat;
+        _engine->Tick(false, rebuff.IsPending(now), combat);
+        Player* bot = _ai.GetBot();
+        if (rebuff.IsPending(getMSTime()) && bot && !combat && !bot->IsNonMeleeSpellCast(false) &&
+            !rebuff.HasWork() && !PlayerbotPartyBuff::RebuffOnGlobalCooldown(_ai))
+        {
+            rebuff.Finish();
+            TC_LOG_INFO("server", "PB-REBUFF: %s ended pass with no current eligible buff work", bot->GetName().c_str());
+        }
     }
 }
 void PlayerbotSessionBehavior::SelectEngineState()
@@ -151,6 +443,16 @@ void PlayerbotSessionBehavior::SelectEngineState()
     if (!_stateEngines) return;
     Player* bot = _ai.GetBot();
     bool suspended = !bot || bot->IsBeingTeleported() || _serverOriginInstanceJoinRequest.load();
+    if (suspended) _strategyCommands.Cancel();
+    if (suspended || !bot->IsAlive()) _stayCommands.Cancel();
+    if (_ai.IsStaying() && !PlayerbotPosition::KeepStay(PlayerbotModuleStayEnabled(), suspended, PlayerbotPosition::ValidStay(_ai)))
+    {
+        ReleaseStay();
+        if (!_serverOriginFollowTargetGuidLow.load()) _ai.ClearController();
+        _serverOriginRecoveryOwnerGuidLow = 0;
+    }
+    PlayerbotPosition::UpdateReturn(_ai);
+    if (suspended || !bot->IsAlive()) _ai.Rebuff().End();
     if (suspended != _engineTransferSuspended)
         _stateEngines->CancelPendingActions();
     _engineTransferSuspended = suspended;
@@ -163,6 +465,32 @@ void PlayerbotSessionBehavior::SelectEngineState()
 }
 void PlayerbotSessionBehavior::UpdateWorld()
 {
+    auto validCheck = [&](PlayerbotReadyCheck::Request const& request)
+    {
+        Player* bot = _session.GetPlayer();
+        Group* group = bot ? bot->GetGroup() : nullptr;
+        ObjectGuid initiator = ObjectGuid::Create<HighGuid::Player>(request.Initiator);
+        Player* requester = ObjectAccessor::FindConnectedPlayer(initiator);
+        return PlayerbotModuleReadyCheckEnabled() && bot && group &&
+            uint64(group->GetGUID()) == request.Group && group->IsMember(bot->GetGUID()) &&
+            group->IsMember(initiator) && requester && requester->GetGroup() == group &&
+            (group->IsLeader(initiator) || group->IsAssistant(initiator)) &&
+            group->MatchesPlayerbotReadyCheck(request.Check, initiator, getMSTime());
+    };
+    if (auto active = _readyChecks.Active(getMSTime()))
+        if (!validCheck(*active)) _readyChecks.Cancel(*active);
+    if (auto reply = _readyChecks.TakeReply(getMSTime()))
+    {
+        Player* bot = _session.GetPlayer();
+        if (validCheck(reply->Identity))
+        {
+            WorldPacket answer(MSG_RAID_READY_CHECK, 1);
+            answer << uint8(reply->Ready ? 1 : 0); // Cata input is state only, NOT donor GUID + state.
+            _session.HandleRaidReadyCheckOpcode(answer);
+            TC_LOG_INFO("server", "PB-READY: %s answered ready check %llu: %s", bot->GetName().c_str(),
+                static_cast<unsigned long long>(reply->Identity.Check), reply->Ready ? "ready" : "not ready");
+        }
+    }
     if (_serverOriginMovementRequest.load() || _serverOriginCombatRequest.load() ||
         _serverOriginInstanceJoinRequest.load() || _serverOriginAttacking.load())
         _ai.LootRequests().Cancel();
@@ -234,12 +562,14 @@ void PlayerbotSessionBehavior::RequestPartyControllerHold()
 void PlayerbotSessionBehavior::RequestServerOriginAttack()
 {
     ASSERT(_session.IsServerOrigin());
+    _stayCommands.Cancel();
     _serverOriginCombatRequest.store(1);
 }
 
 void PlayerbotSessionBehavior::RequestServerOriginCease()
 {
     ASSERT(_session.IsServerOrigin());
+    _stayCommands.Cancel();
     _serverOriginAutoAssistEnabled.store(false);
     _serverOriginCombatRequest.store(2);
 }
@@ -247,7 +577,43 @@ void PlayerbotSessionBehavior::RequestServerOriginCease()
 void PlayerbotSessionBehavior::RequestServerOriginInstanceJoin(uint32 mapId)
 {
     ASSERT(_session.IsServerOrigin() && mapId);
+    _stayCommands.Cancel();
     _serverOriginInstanceJoinRequest.store(mapId);
+}
+bool PlayerbotSessionBehavior::RequestPlayerbotRange(uint32 requesterGuidLow, std::string const& param)
+{
+    return _rangeCommands.Post(requesterGuidLow, param, getMSTime());
+}
+bool PlayerbotSessionBehavior::RequestPlayerbotStrategy(uint32 requesterGuidLow, std::string const& command,
+    std::string const& token, std::string const& target, uint64 batch, PlayerbotStrategyBinding const& binding)
+{
+    return PlayerbotModuleStrategyControlEnabled() && (token.empty() || PlayerbotModuleStrategyMutationEnabled()) &&
+        (!batch || PlayerbotModuleGroupStrategyMutationEnabled()) &&
+        _strategyCommands.Post(requesterGuidLow, command, getMSTime(), token, target, batch, binding);
+}
+bool PlayerbotSessionBehavior::RequestPlayerbotRebuff(uint32 requesterGuidLow)
+{
+    return _rebuffCommands.Post(requesterGuidLow, getMSTime());
+}
+bool PlayerbotSessionBehavior::RequestPlayerbotStay(uint32 requesterGuidLow)
+{
+    return PlayerbotModuleStayEnabled() && !_serverOriginMovementRequest.load() && !_serverOriginCombatRequest.load() &&
+        !_serverOriginInstanceJoinRequest.load() && _stayCommands.Post(requesterGuidLow, getMSTime());
+}
+void PlayerbotSessionBehavior::ReleaseStay()
+{
+    _stayCommands.Cancel();
+    if (_stateEngines)
+    {
+        _stateEngines->Get(StateEngines::State::NonCombat).RemoveStrategy("stay");
+        if (_ai.IsStaying()) _stateEngines->CancelPendingActions();
+    }
+    PlayerbotPosition::Release(_ai);
+}
+void PlayerbotSessionBehavior::RequestPlayerbotReadyCheck(uint64 group, uint64 check, uint32 initiator, uint32 created)
+{
+    if (PlayerbotModuleReadyCheckEnabled())
+        _readyChecks.Post({group, check, initiator, created});
 }
 
 void PlayerbotSessionBehavior::UpdateServerOriginMovement(uint32 diff)
@@ -271,6 +637,7 @@ void PlayerbotSessionBehavior::UpdateServerOriginMovement(uint32 diff)
         _serverOriginPathRefreshMs = 0;
         _serverOriginPathCatchUpActive = false;
         _serverOriginHealCheckTimer = 0;
+        _serverOriginSupportReachGuid.Clear();
         _serverOriginFollowTraceRemainingMs = 0;
         _serverOriginFollowTraceSampleTimerMs = 0;
         _player->GetMotionMaster()->Clear(MOTION_SLOT_ACTIVE);
@@ -280,6 +647,30 @@ void PlayerbotSessionBehavior::UpdateServerOriginMovement(uint32 diff)
     };
 
     uint64 request = _serverOriginMovementRequest.exchange(0);
+    bool activateStay = false;
+    if (request || _serverOriginCombatRequest.load() || _serverOriginInstanceJoinRequest.load()) _strategyCommands.Cancel();
+    if (request || _serverOriginCombatRequest.load() || _serverOriginInstanceJoinRequest.load()) ReleaseStay();
+    if (auto stay = _stayCommands.Take(getMSTime()))
+    {
+        Player* requester = _player->GetMap()->GetPlayer(ObjectGuid::Create<HighGuid::Player>(stay->Requester));
+        if (!request && !_serverOriginCombatRequest.load() && !_serverOriginInstanceJoinRequest.load() &&
+            requester && requester == _ai.GetController() && _stateEngines &&
+            PlayerbotSecurity(*_player).CheckLevelFor(PLAYERBOT_SECURITY_ALLOW_ALL, *requester) &&
+            PlayerbotPosition::CaptureStay(_ai))
+        {
+            activateStay = true; request = uint64(-1);
+            RequestServerOriginCease(); // Native cease is processed later in this same map update.
+        }
+        else if (requester)
+            ChatHandler(requester->GetSession()).PSendSysMessage("Playerbot %s: stay rejected; requires the current controller and safe idle ground state.", _player->GetName().c_str());
+    }
+    if (!_serverOriginSupportReachGuid.IsEmpty() && (request || _serverOriginCombatRequest.load() ||
+        _serverOriginInstanceJoinRequest.load() || !_player->IsAlive() || _player->IsBeingTeleported()))
+    {
+        _player->GetMotionMaster()->Clear(MOTION_SLOT_ACTIVE);
+        _player->StopMoving();
+        _serverOriginSupportReachGuid.Clear();
+    }
     if (request && _stateEngines) _stateEngines->CancelPendingActions();
     if (request || _serverOriginCombatRequest.load() || _serverOriginAttacking.load() ||
         !PlayerbotModuleCorpseLootEnabled() || !_player->IsAlive() || _player->IsBeingTeleported())
@@ -294,8 +685,23 @@ void PlayerbotSessionBehavior::UpdateServerOriginMovement(uint32 diff)
     bool resting = PlayerbotRest::Update(_ai, request != 0 || _serverOriginCombatRequest.load() != 0 ||
         _serverOriginAttacking.load());
     bool restEnded = wasResting && !resting;
+    auto mount = PlayerbotMount::Update(_ai, _groundMount, _serverOriginFollowTargetGuidLow.load() != 0,
+        request != 0 || _serverOriginCombatRequest.load() || _serverOriginAttacking.load() ||
+        _serverOriginInstanceJoinRequest.load(), getMSTime());
+    if (mount.ResetFollow) _serverOriginFormationSignature = 0;
     if (request == uint64(-1))
-        hold(false);
+    {
+        if (!activateStay) ReleaseStay();
+        hold(activateStay);
+        if (activateStay)
+        {
+            _ai.SetStaying(true);
+            _stateEngines->Get(StateEngines::State::NonCombat).AddStrategy("stay");
+            TC_LOG_INFO("server", "PB-STAY: %s captured current position", _player->GetName().c_str());
+            if (Player* owner = _ai.GetController())
+                ChatHandler(owner->GetSession()).PSendSysMessage("Playerbot %s: stay position set.", _player->GetName().c_str());
+        }
+    }
     else if (request)
     {
         ObjectGuid ownerGuid = ObjectGuid::Create<HighGuid::Player>(uint32(request));
@@ -303,8 +709,9 @@ void PlayerbotSessionBehavior::UpdateServerOriginMovement(uint32 diff)
         if (owner && owner != _player && !owner->GetSession()->IsServerOrigin() && owner->IsAlive() && _player->IsAlive())
         {
             PlayerbotGroup::FollowPosition position = PlayerbotGroup::PositionFor(*_player, *owner);
-            _player->GetMotionMaster()->MoveFollow(owner, position.Distance, position.Angle);
-            _serverOriginFormationSignature = position.Signature;
+            bool canMove = PlayerbotCombatMovement::CanMove(*_player);
+            if (canMove) _player->GetMotionMaster()->MoveFollow(owner, position.Distance, position.Angle);
+            _serverOriginFormationSignature = canMove ? position.Signature : 0; // Retry after native control ends.
             _serverOriginPathRefreshMs = 0;
             _serverOriginPathCatchUpActive = false;
             _serverOriginHealCheckTimer = 0;
@@ -360,7 +767,8 @@ void PlayerbotSessionBehavior::UpdateServerOriginMovement(uint32 diff)
 
             _serverOriginFollowTraceRemainingMs = _serverOriginFollowTraceRemainingMs > diff ? _serverOriginFollowTraceRemainingMs - diff : 0;
         }
-        if (owner && owner->IsAlive() && _player->IsAlive() && !resting && !looting && !_serverOriginAttacking.load() && !_player->IsInCombat())
+        if (owner && owner->IsAlive() && _player->IsAlive() && !resting && !looting && !mount.BlockFollow && !_serverOriginAttacking.load() &&
+            !_player->IsInCombat() && _serverOriginSupportReachGuid.IsEmpty() && PlayerbotCombatMovement::CanMove(*_player))
         {
             PlayerbotGroup::FollowPosition position = PlayerbotGroup::PositionFor(*_player, *owner);
             bool usePath = PlayerbotGroup::ShouldPathCatchUp(_serverOriginPathCatchUpActive, _player->GetExactDist2d(owner));
@@ -525,6 +933,55 @@ void PlayerbotSessionBehavior::UpdateServerOriginInstanceJoin()
     TC_LOG_INFO("server", "PB-PARTY: %s began dungeon transfer to map %u", _player->GetName().c_str(), mapId);
 }
 
+bool PlayerbotSessionBehavior::UpdateSupportReach(PlayerbotPartySupport::ReachKind start)
+{
+    Player* bot = _ai.GetBot();
+    Player* owner = _ai.GetController();
+    ObjectGuid next;
+    bool enabled = bot && owner && bot->getClass() == CLASS_PRIEST &&
+        bot->IsInWorld() && owner->IsInWorld() && bot->IsAlive() && owner->IsAlive() &&
+        _serverOriginFollowTargetGuidLow.load() && _serverOriginAutoAssistEnabled.load() &&
+        PlayerbotModuleEnginePriestHealEnabled() && !_engineTransferSuspended &&
+        !bot->IsBeingTeleported() && !owner->IsBeingTeleported() && !bot->IsNonMeleeSpellCast(false) &&
+        !bot->IsMounted() && PlayerbotCombatMovement::CanMove(*bot) &&
+        !_serverOriginInstanceJoinRequest.load() && !_ai.GetRestSpellId() &&
+        !_ai.LootRequests().Pending() && !_ai.LootPursuit().Active();
+    _ai.SupportReachRequests().Enable(enabled);
+    auto kind = start != PlayerbotPartySupport::ReachKind::None ? start : _serverOriginSupportReachKind;
+    if (enabled && (start != PlayerbotPartySupport::ReachKind::None || !_serverOriginSupportReachGuid.IsEmpty()))
+        next = kind == PlayerbotPartySupport::ReachKind::Resurrect ?
+            PlayerbotPriest::ResurrectionReachTarget(*bot, *owner, PlayerbotCombatMovement::GetRange(_ai, "spell")) :
+            PlayerbotPriest::HealingReachTarget(*bot, *owner, PlayerbotCombatMovement::GetRange(_ai, "heal"));
+    if (bot && !next.IsEmpty() && next == _serverOriginSupportReachGuid &&
+        PlayerbotPriest::HealingReachMustYield(getMSTimeDiff(_serverOriginSupportReachStartedMs, getMSTime()),
+            bot->GetMotionMaster()->GetCurrentMovementGeneratorType() == POINT_MOTION_TYPE))
+    {
+        next.Clear(); // Yield one decision tick, then re-evaluate a fresh destination.
+        _ai.SupportReachRequests().Enable(false); // Do not reacquire in this same engine tick.
+    }
+    if (next != _serverOriginSupportReachGuid)
+    {
+        if (bot && !_serverOriginSupportReachGuid.IsEmpty())
+        {
+            bot->GetMotionMaster()->Clear(MOTION_SLOT_ACTIVE);
+            bot->StopMoving();
+        }
+        _serverOriginSupportReachGuid = next;
+        _serverOriginSupportReachKind = next.IsEmpty() ? PlayerbotPartySupport::ReachKind::None : kind;
+        _serverOriginSupportReachStartedMs = getMSTime();
+        if (bot && !next.IsEmpty())
+            if (Player* target = bot->GetMap()->GetPlayer(next))
+            {
+                // Snapshot destination, native pathfinding; no retained Player pointer.
+                // Re-evaluate at the healing cadence and stop upon entering heal range.
+                bot->GetMotionMaster()->MovePoint(0, target->GetPosition(), true);
+                TC_LOG_INFO("server", "PB-HEAL: %s closing %s gap to %s",
+                    bot->GetName().c_str(), kind == PlayerbotPartySupport::ReachKind::Resurrect ? "resurrection" : "healing", target->GetName().c_str());
+            }
+    }
+    return !_serverOriginSupportReachGuid.IsEmpty();
+}
+
 void PlayerbotSessionBehavior::UpdateServerOriginCombat(uint32 diff)
 {
     Player* _player = _session.GetPlayer();
@@ -542,6 +999,8 @@ void PlayerbotSessionBehavior::UpdateServerOriginCombat(uint32 diff)
         else
         {
             _serverOriginHealCheckTimer = 750;
+            if (UpdateSupportReach())
+                return;
             if (_engine && PlayerbotModuleEnginePriestHealEnabled())
             {
                 if (!_priestEngineHealAnnounced)
@@ -550,6 +1009,8 @@ void PlayerbotSessionBehavior::UpdateServerOriginCombat(uint32 diff)
                     _priestEngineHealAnnounced = true;
                 }
                 TickEngine(_player->IsInCombat());
+                auto reach = _ai.SupportReachRequests().Take();
+                if (reach != PlayerbotPartySupport::ReachKind::None) UpdateSupportReach(reach);
             }
             else
                 PlayerbotPriest::HealParty(*_player, _ai.GetController());
@@ -560,6 +1021,7 @@ void PlayerbotSessionBehavior::UpdateServerOriginCombat(uint32 diff)
     {
         if (_stateEngines) _stateEngines->CancelPendingActions();
         _ai.ClearCurrentTarget();
+        _serverOriginSupportReachGuid.Clear();
         if (_serverOriginAttacking.exchange(false))
             TC_LOG_INFO("server", "PB-02: %s ceased attack", _player->GetName().c_str());
         _serverOriginCombatTargetGuid.Clear();
@@ -575,7 +1037,8 @@ void PlayerbotSessionBehavior::UpdateServerOriginCombat(uint32 diff)
             // Restore it even while native combat flags are still draining.
             uint32 ownerGuidLow = _serverOriginFollowTargetGuidLow.load();
             Player* owner = ownerGuidLow ? _player->GetMap()->GetPlayer(ObjectGuid::Create<HighGuid::Player>(ownerGuidLow)) : nullptr;
-            if (owner && owner->IsAlive() && _player->IsAlive() && !_player->IsBeingTeleported())
+            _serverOriginFormationSignature = 0; // Follow can resume after native control restrictions end.
+            if (owner && owner->IsAlive() && PlayerbotCombatMovement::CanMove(*_player))
             {
                 auto position = PlayerbotGroup::PositionFor(*_player, *owner);
                 _player->GetMotionMaster()->MoveFollow(owner, position.Distance, position.Angle);
@@ -587,6 +1050,7 @@ void PlayerbotSessionBehavior::UpdateServerOriginCombat(uint32 diff)
     auto validTarget = [_player](Player* owner, Creature* target)
     {
         return owner && owner->IsAlive() && target && !target->IsControlledByPlayer() && target->IsAlive() && _player->IsAlive() &&
+            !PlayerbotTargetSelection::IsProtectedTarget(*target) &&
             _player->IsValidAttackTarget(target) && _player->IsWithinDistInMap(target, 25.0f) &&
             owner->IsWithinDistInMap(target, 25.0f) && _player->IsWithinLOSInMap(target);
     };
@@ -600,6 +1064,9 @@ void PlayerbotSessionBehavior::UpdateServerOriginCombat(uint32 diff)
         if (!priest && !ranged && _player->getClass() != CLASS_WARRIOR)
             return false;
         cease();
+        // Donor AttackAction faces before native attack/chase submission.
+        // Failure to turn does not bypass native movement/cast restrictions.
+        PlayerbotCombatMovement::FaceForAttack(*_player, *target);
         if (!priest && !_player->Attack(target, !ranged))
             return false;
 
@@ -617,8 +1084,11 @@ void PlayerbotSessionBehavior::UpdateServerOriginCombat(uint32 diff)
             _player->StopMoving();
         }
         else if (ranged)
-            _player->GetMotionMaster()->MoveChase(target, 20.0f);
-        else
+        {
+            if (PlayerbotCombatMovement::CanMove(*_player))
+                _player->GetMotionMaster()->MoveChase(target, PlayerbotCombatMovement::GetRange(_ai, "spell"));
+        }
+        else if (PlayerbotCombatMovement::CanMove(*_player))
         {
             bool tanking = target->GetVictim() == _player;
             _serverOriginMeleeStance = tanking ? 2 : 1;
@@ -672,13 +1142,16 @@ void PlayerbotSessionBehavior::UpdateServerOriginCombat(uint32 diff)
             char const* fallback = _engine ? PlayerbotTargetSelection::FallbackValue(_player->getClass(),
                 _player->GetPrimaryTalentTree(_player->GetActiveSpec()), PlayerbotModuleEngineWarriorCombatEnabled(),
                 PlayerbotModuleEngineMageCombatEnabled(), PlayerbotModuleEnginePriestHealEnabled()) : nullptr;
-            if (fallback && (!validTarget(owner, target) || !owner->IsInCombatWith(target)))
+            bool tank = fallback && std::string_view(fallback) == "tank target";
+            if (fallback && (tank || !validTarget(owner, target) || !PlayerbotTargetSelection::IsEngagedWithAttachedParty(*_player, *owner, *target)))
             {
                 Value<ObjectGuid>* value = _aiContext ? _aiContext->GetValue<ObjectGuid>(fallback) : nullptr;
                 ObjectGuid candidate = value ? value->Get() : ObjectGuid::Empty;
-                target = candidate.IsEmpty() ? nullptr : ObjectAccessor::GetCreature(*_player, candidate);
+                Creature* resolved = candidate.IsEmpty() ? nullptr : ObjectAccessor::GetCreature(*_player, candidate);
+                if (!tank || resolved)
+                    target = resolved;
             }
-            if (validTarget(owner, target) && owner->IsInCombatWith(target))
+            if (validTarget(owner, target) && PlayerbotTargetSelection::IsEngagedWithAttachedParty(*_player, *owner, *target))
                 beginAttack(target, true);
         }
     }
@@ -730,10 +1203,11 @@ void PlayerbotSessionBehavior::UpdateServerOriginCombat(uint32 diff)
         bool ownerBeyondLeash = owner && !_player->IsWithinDistInMap(owner, 35.0f);
         bool targetBeyondLeash = target && !_player->IsWithinDistInMap(target, 35.0f);
         if (!owner || !owner->IsAlive() || !target || target->IsControlledByPlayer() || !target->IsAlive() || !_player->IsAlive() ||
+            PlayerbotTargetSelection::IsProtectedTarget(*target) ||
             (_player->getClass() != CLASS_PRIEST && _player->GetVictim() != target) || !_player->IsValidAttackTarget(target) ||
             (_player->getClass() == CLASS_PRIEST && (_player->IsBeingTeleported() ||
-                !PlayerbotModuleEnginePriestHealEnabled() || !owner->IsInCombatWith(target))) ||
-            (_serverOriginAutoAssistedAttack && !owner->IsInCombatWith(target)) ||
+                !PlayerbotModuleEnginePriestHealEnabled() || !PlayerbotTargetSelection::IsEngagedWithAttachedParty(*_player, *owner, *target))) ||
+            (_serverOriginAutoAssistedAttack && !PlayerbotTargetSelection::IsEngagedWithAttachedParty(*_player, *owner, *target)) ||
             ownerBeyondLeash || targetBeyondLeash)
         {
             if (target && !target->IsAlive())
@@ -741,6 +1215,8 @@ void PlayerbotSessionBehavior::UpdateServerOriginCombat(uint32 diff)
                 _ai.RecordDefeatedCreature(target->GetGUID(), getMSTime());
                 TC_LOG_INFO("server", "PB-02: %s target died; returning to follow", _player->GetName().c_str());
             }
+            else if (target && PlayerbotTargetSelection::IsProtectedTarget(*target))
+                TC_LOG_INFO("server", "PB-02: %s target protected by control; returning to follow", _player->GetName().c_str());
             else if (ownerBeyondLeash || targetBeyondLeash)
                 TC_LOG_INFO("server", "PB-02: %s exceeded combat leash; returning to follow", _player->GetName().c_str());
             cease();
@@ -761,9 +1237,41 @@ void PlayerbotSessionBehavior::UpdateServerOriginCombat(uint32 diff)
         }
         _serverOriginActionCheckTimer = 1000;
 
+        if (_engine && PlayerbotModuleEngineWarriorCombatEnabled() &&
+            _player->getClass() == CLASS_WARRIOR &&
+            PlayerbotRoles::IsTank(*_player) &&
+            _serverOriginAutoAssistedAttack && !_player->IsNonMeleeSpellCast(false))
+        {
+            // Fresh native GUID resolution on the map thread. Donor TankTargetValue
+            // ranks lost aggro first; retain this adapter's authorized owner combat
+            // scope and do not replace explicit attack commands or steal tank aggro.
+            ObjectGuid candidateGuid = PlayerbotTargetSelection::SelectTankTarget(_ai, *_engine);
+            Creature* candidate = candidateGuid.IsEmpty() ? nullptr : ObjectAccessor::GetCreature(*_player, candidateGuid);
+            Player* victim = candidate && candidate->GetVictim() ? candidate->GetVictim()->ToPlayer() : nullptr;
+            bool partyVictim = victim && (victim == owner || victim == _player ||
+                (_player->GetGroup() && victim->GetGroup() == _player->GetGroup()));
+            bool otherTank = victim && PlayerbotRoles::IsTank(*victim);
+            if (PlayerbotTargetSelection::ShouldProtectPartyMember(_serverOriginAutoAssistedAttack,
+                candidate && candidate != target, partyVictim, victim == _player, otherTank) &&
+                validTarget(owner, candidate) && PlayerbotTargetSelection::IsEngagedWithAttachedParty(*_player, *owner, *candidate))
+            {
+                if (beginAttack(candidate, true))
+                {
+                    target = candidate;
+                    _serverOriginActionCheckTimer = 1000;
+                    TC_LOG_INFO("server", "PB-ROLE: %s recovering party aggro from %s",
+                        _player->GetName().c_str(), victim->GetName().c_str());
+                }
+                else
+                    return; // Native Attack rejected the replacement after cease.
+            }
+        }
+
         if (_player->getClass() == CLASS_MAGE)
         {
-            if (!_player->IsNonMeleeSpellCast(false))
+            if (_ai.NeedsSpellChaseRefresh() && PlayerbotCombatMovement::RefreshSpellChase(_ai))
+                _ai.ClearSpellChaseRefresh();
+            if (!PlayerbotModuleEngineMageCombatEnabled() && !_player->IsNonMeleeSpellCast(false))
                 _player->SetFacingToObject(target);
             if (_engine && PlayerbotModuleEngineMageCombatEnabled())
             {
@@ -783,7 +1291,7 @@ void PlayerbotSessionBehavior::UpdateServerOriginCombat(uint32 diff)
 
         bool tanking = target->GetVictim() == _player;
         uint8 stance = tanking ? 2 : 1;
-        if (stance != _serverOriginMeleeStance)
+        if (stance != _serverOriginMeleeStance && PlayerbotCombatMovement::CanMove(*_player))
         {
             _player->GetMotionMaster()->MoveChase(target, std::nullopt, ChaseAngle(PlayerbotGroup::MeleeChaseAngle(tanking)));
             _serverOriginMeleeStance = stance;

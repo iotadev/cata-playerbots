@@ -7,9 +7,14 @@
 #include "PlayerbotSessionHooks.h"
 #include "ObjectGuid.h"
 #include "PlayerbotAI.h"
+#include "PlayerbotReadyCheck.h"
+#include "../Ai/Base/PlayerbotMount.h"
+#include "../Ai/Base/PlayerbotPosition.h"
 #include "../Ai/Base/PlayerbotLootPolicy.h"
 #include "Engine.h"
 #include "StateEngines.h"
+#include "../Ai/Base/PlayerbotCombatMovement.h"
+#include "Cmd/PlayerbotStrategyControl.h"
 #include <atomic>
 #include <memory>
 class PlayerbotSessionBehavior final : public PlayerbotSessionHooks
@@ -23,19 +28,34 @@ public:
     void RequestServerOriginAttack() override;
     void RequestServerOriginCease() override;
     void RequestServerOriginInstanceJoin(uint32 mapId) override;
+    bool RequestPlayerbotRange(uint32 requesterGuidLow, std::string const& param) override;
+    bool RequestPlayerbotStrategy(uint32 requesterGuidLow, std::string const& command,
+        std::string const& token, std::string const& target, uint64 batch, PlayerbotStrategyBinding const& binding) override;
+    bool RequestPlayerbotRebuff(uint32 requesterGuidLow) override;
+    bool RequestPlayerbotStay(uint32 requesterGuidLow) override;
+    void RequestPlayerbotReadyCheck(uint64 group, uint64 check, uint32 initiator, uint32 created) override;
     uint32 GetFollowTargetGuidLow() const override { return _serverOriginFollowTargetGuidLow.load(); }
     uint32 GetPartyControllerGuidLow() const override { return _serverOriginPartyControllerGuidLow.load(); }
     bool IsAttacking() const override { return _serverOriginAttacking.load(); }
+    uint32 GetStrategyRoleMask() const override { return _strategyRoleMask.load(std::memory_order_relaxed); }
+    std::shared_ptr<PlayerbotStrategySnapshot const> GetStrategySnapshot() const override
+    { return std::atomic_load(&_strategySnapshot); }
     void UpdateMap(uint32 diff) override;
     void UpdateWorld() override;
 private:
     void UpdateServerOriginMovement(uint32 diff);
+    void CompleteNearTeleport();
     void UpdateServerOriginParty();
     void UpdateServerOriginResurrection();
     void UpdateServerOriginInstanceJoin();
     void UpdateServerOriginCombat(uint32 diff);
+    bool UpdateSupportReach(PlayerbotPartySupport::ReachKind start = PlayerbotPartySupport::ReachKind::None);
     void TickEngine(bool inCombat = false);
     void SelectEngineState();
+    void ReleaseStay();
+    bool EvaluateReadyCheck(PlayerbotReadyCheck::Request const& request);
+    void UpdateDeferredReadyCheck();
+    void CancelDeferredReadyCheck();
     bool _engineTickedThisUpdate = false;
     uint32 _restCheckTimer = 0;
     WorldSession& _session;
@@ -43,6 +63,17 @@ private:
     // class is known and destroyed in reverse order, with no cached Player*.
     PlayerbotAI _ai;
     PlayerbotLoot::PassPreference _lootPassPreference;
+    PlayerbotCombatMovement::RangeMailbox _rangeCommands;
+    PlayerbotStrategyControl::Mailbox _strategyCommands;
+    bool _noncombatDefaultsInitialized = false; // map-owned; overrides last until logout or gate disable
+    bool _combatDefaultsInitialized = false; // shared utility overrides, not role/spec defaults
+    std::shared_ptr<PlayerbotStrategySnapshot const> _strategySnapshot; // access only through atomic load/store
+    ForceRebuffMailbox _rebuffCommands;
+    PlayerbotMount::State _groundMount;
+    PlayerbotPosition::Mailbox _stayCommands;
+    PlayerbotReadyCheck::Mailbox _readyChecks;
+    std::atomic<uint32> _strategyRoleMask { 0 }; // Copied combat roles, no cross-session engine access.
+    std::optional<PlayerbotReadyCheck::DeferredPass> _deferredReadyCheck; // map-owned identities only
     std::unique_ptr<AiObjectContext> _aiContext;
     std::unique_ptr<StateEngines> _stateEngines;
     Engine* _engine = nullptr; // borrowed active state engine
@@ -63,6 +94,9 @@ private:
     bool _serverOriginPathCatchUpActive = false;
     uint8 _serverOriginMeleeStance = 0; // 0 unset, 1 behind, 2 tank/front
     uint32 _serverOriginHealCheckTimer = 0;
+    ObjectGuid _serverOriginSupportReachGuid; // map-thread movement ownership only
+    uint32 _serverOriginSupportReachStartedMs = 0;
+    PlayerbotPartySupport::ReachKind _serverOriginSupportReachKind = PlayerbotPartySupport::ReachKind::None;
     uint32 _serverOriginResurrectionCheckTimer = 0;
     std::atomic<bool> _serverOriginAutoAssistEnabled { false };
     uint32 _serverOriginFollowTraceRemainingMs = 0;

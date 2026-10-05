@@ -4,6 +4,7 @@
  * Released under GNU GPL v2 or any later version.
  */
 #include "PlayerbotCorpseLoot.h"
+#include "PlayerbotTargetSelection.h"
 #include "../../Bot/PlayerbotAI.h"
 #include "../../Bot/Engine/Value/Value.h"
 #include "../../Script/PlayerbotConfig.h"
@@ -13,6 +14,7 @@
 #include "LootPackets.h"
 #include "Log.h"
 #include "MotionMaster.h"
+#include "PlayerbotCombatMovement.h"
 #include "ObjectAccessor.h"
 #include "Player.h"
 #include "Timer.h"
@@ -24,7 +26,7 @@ bool Ready(Player* bot, Player* owner)
 {
     return PlayerbotModuleCorpseLootEnabled() && bot && owner && bot->IsAlive() && owner->IsAlive() &&
         bot->IsInWorld() && owner->IsInWorld() && bot->GetMap() == owner->GetMap() &&
-        !bot->IsInCombat() && !owner->IsInCombat() && !bot->IsBeingTeleported() &&
+        !PlayerbotTargetSelection::HasNearbyPartyCombat(*bot, *owner) && !bot->IsBeingTeleported() &&
         !owner->IsBeingTeleported() && !bot->IsMounted() && !bot->IsInFlight() &&
         !bot->IsNonMeleeSpellCast(false) && bot->IsWithinDistInMap(owner, 25.0f);
 }
@@ -51,7 +53,7 @@ ObjectGuid Candidate(PlayerbotAI* ai, bool nearby = true)
 {
     Player* bot = ai ? ai->GetBot() : nullptr;
     Player* owner = ai ? ai->GetController() : nullptr;
-    if (!Ready(bot, owner) || ai->GetRestSpellId() || ai->LootRequests().Pending())
+    if (ai->IsStaying() || !Ready(bot, owner) || ai->GetRestSpellId() || ai->LootRequests().Pending())
         return ObjectGuid::Empty;
     uint32 now = getMSTime();
     Unit* selected = owner->GetSelectedUnit();
@@ -134,7 +136,7 @@ public:
         ObjectGuid guid = Candidate(botAI, false);
         Player* bot = botAI->GetBot();
         Creature* corpse = bot && !guid.IsEmpty() ? ObjectAccessor::GetCreature(*bot, guid) : nullptr;
-        if (!corpse || bot->HasUnitState(UNIT_STATE_LOST_CONTROL | UNIT_STATE_NOT_MOVE) ||
+        if (!corpse || !PlayerbotCombatMovement::CanMove(*bot) ||
             NearbyCorpse(*bot, corpse) || !botAI->LootPursuit().Begin(guid, getMSTime()))
             return false;
         bot->GetMotionMaster()->Clear(MOTION_SLOT_ACTIVE);
@@ -169,7 +171,7 @@ bool PlayerbotCorpseLoot::UpdateMovement(PlayerbotAI& ai, bool interrupt, bool& 
     Player* owner = ai.GetController();
     Creature* corpse = bot ? ObjectAccessor::GetCreature(*bot, pursuit.Corpse()) : nullptr;
     bool timeout = pursuit.Expired(getMSTime());
-    if (interrupt || !Ready(bot, owner) || bot->HasUnitState(UNIT_STATE_LOST_CONTROL | UNIT_STATE_NOT_MOVE) ||
+    if (interrupt || !Ready(bot, owner) || !PlayerbotCombatMovement::CanMove(*bot) ||
         ai.GetRestSpellId() || timeout ||
         !ReachableCorpse(*bot, *owner, corpse) || NearbyCorpse(*bot, corpse) || ai.LootRequests().Pending())
     {

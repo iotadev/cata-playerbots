@@ -13,13 +13,29 @@
 #include "World.h"
 #include <atomic>
 namespace { std::atomic<bool> RestEnabled { false }; }
+namespace { std::atomic<bool> PotionsEnabled { false }; }
 namespace { std::atomic<bool> MageArmorEnabled { false }; }
 namespace { std::atomic<bool> LootPassEnabled { false }; }
 namespace { std::atomic<bool> CorpseLootEnabled { false }; }
+namespace { std::atomic<bool> ReadyCheckEnabled { false }; }
+namespace { std::atomic<bool> ReadyCheckRebuffEnabled { false }; }
+namespace { std::atomic<bool> GroundMountEnabled { false }; }
+namespace { std::atomic<bool> StayEnabled { false }; }
+namespace { std::atomic<bool> StrategyControlEnabled { false }; }
+namespace { std::atomic<bool> StrategyMutationEnabled { false }; }
+namespace { std::atomic<bool> GroupStrategyMutationEnabled { false }; }
+bool PlayerbotModuleGroupStrategyMutationEnabled() { return GroupStrategyMutationEnabled.load(std::memory_order_relaxed); }
+bool PlayerbotModuleStrategyMutationEnabled() { return StrategyMutationEnabled.load(std::memory_order_relaxed); }
+bool PlayerbotModuleStrategyControlEnabled() { return StrategyControlEnabled.load(std::memory_order_relaxed); }
+bool PlayerbotModuleStayEnabled() { return StayEnabled.load(std::memory_order_relaxed); }
+bool PlayerbotModuleGroundMountEnabled() { return GroundMountEnabled.load(std::memory_order_relaxed); }
+bool PlayerbotModuleReadyCheckRebuffEnabled() { return ReadyCheckRebuffEnabled.load(std::memory_order_relaxed); }
+bool PlayerbotModuleReadyCheckEnabled() { return ReadyCheckEnabled.load(std::memory_order_relaxed); }
 bool PlayerbotModuleCorpseLootEnabled() { return CorpseLootEnabled.load(std::memory_order_relaxed); }
 bool PlayerbotModuleLootPassEnabled() { return LootPassEnabled.load(std::memory_order_relaxed); }
 bool PlayerbotModuleMageArmorEnabled() { return MageArmorEnabled.load(std::memory_order_relaxed); }
 bool PlayerbotModuleRestEnabled() { return RestEnabled.load(std::memory_order_relaxed); }
+bool PlayerbotModulePotionsEnabled() { return PotionsEnabled.load(std::memory_order_relaxed); }
 bool PlayerbotModuleEngineWarriorBuffEnabled()
 {
     return sConfigMgr->GetBoolDefault("Playerbots.Dev.EngineWarriorBuff", false);
@@ -47,6 +63,20 @@ bool PlayerbotModuleEnginePriestHealEnabled()
 
 void LoadPlayerbotModuleSettings(World& world, bool moduleConfigsValid)
 {
+    StrategyControlEnabled.store(moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.StrategyControl.Enabled", false),
+        std::memory_order_relaxed);
+    StrategyMutationEnabled.store(PlayerbotModuleStrategyControlEnabled() && sConfigMgr->GetBoolDefault("Playerbots.StrategyControl.AddonMutations", false),
+        std::memory_order_relaxed);
+    GroupStrategyMutationEnabled.store(PlayerbotModuleStrategyMutationEnabled() &&
+        sConfigMgr->GetBoolDefault("Playerbots.StrategyControl.GroupMutations", false), std::memory_order_relaxed);
+    StayEnabled.store(moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.Movement.Stay.Enabled", false),
+        std::memory_order_relaxed);
+    GroundMountEnabled.store(moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.Mount.Ground.Enabled", false),
+        std::memory_order_relaxed);
+    ReadyCheckEnabled.store(moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.ReadyCheck.Enabled", false),
+        std::memory_order_relaxed);
+    ReadyCheckRebuffEnabled.store(moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.ReadyCheck.ForceRebuff", false),
+        std::memory_order_relaxed);
     PlayerbotDevFixture::SetEnabled(moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.Dev.Enabled", false) &&
         sConfigMgr->GetBoolDefault("Playerbots.Dev.Fixture20.Enabled", false));
     CorpseLootEnabled.store(moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.Loot.Corpses.Enabled", false),
@@ -56,6 +86,8 @@ void LoadPlayerbotModuleSettings(World& world, bool moduleConfigsValid)
     MageArmorEnabled.store(moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.Mage.Armor.Enabled", false),
         std::memory_order_relaxed);
     RestEnabled.store(moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.Rest.Enabled", false),
+        std::memory_order_relaxed);
+    PotionsEnabled.store(moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.Potions.Enabled", false),
         std::memory_order_relaxed);
     bool factoryEnabled = moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.Factory.Enabled", false);
     RandomPlayerbotFactory::SetProvisioningEnabled(factoryEnabled);

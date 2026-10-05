@@ -1,5 +1,1637 @@
 # Port provenance and remaining work
 
+## Shared-state operational party milestone — 2026-10-05
+
+The corrected dedicated dungeon-entry fixture completed all four bot arrivals
+in one Ragefire instance. Player feedback reported working behavior; several
+trash pulls exercised Warrior role actions, Mage damage, Priest Renew,
+combat/noncombat transitions and native corpse opening. The realm stopped
+cleanly; no assertion appeared. Full clears, measured support/resource recovery,
+death/resurrection and addon aggregate ACK/STATE/restore timing remain deferred.
+This records bounded operational acceptance, without extending class or autonomy
+claims. The core harness now enables dungeon entry independently of recovery
+settings; its optional DungeonFixture uses existing native entry hooks.
+
+## Full Linux candidate validation — 2026-10-04
+
+The current uncommitted source built Release worldserver and tests-common on
+Ubuntu 22.04/GCC 11.4 with both optional modules enabled. CTest passed 318/318
+checks. Normal core/script PCH was enabled with two compiler workers. A source
+copy on the container's native filesystem excluded generated builds, Git metadata
+and active `.conf` files; no exact committed revision is claimed for this build.
+Configure/build/test logs are retained locally in the ignored core directory
+`build/linux-milestone-20261004/`. The redundant slow Windows-mounted build was
+interrupted after success. Unrelated realm containers remained stopped.
+Linux realm runtime and native aggregate ACK/STATE/restore timing remain untested.
+Earlier pending-Linux statements below describe their original batch checkpoints.
+
+## Linux protocol/group-policy check and current documentation — 2026-10-04
+
+The current protocol, group batch, pending ownership and completion inbox tests
+compiled directly with Ubuntu 24.04/GCC 13.3 and passed all 30 cases with 4,380
+assertions. This checks portable policy and concurrent completion transport;
+it does not accept the native worldserver integration or the complete Linux
+suite. The available environment lacks the full server toolchain and Docker's
+Linux engine was stopped at that initial check. Full Linux source validation
+subsequently passed as recorded above; realm runtime remains untested.
+
+README.md now summarizes current capabilities, configuration and observed client
+results. Its older batch-by-batch text is preserved in
+docs/README_HISTORY_2026-10-04.md. Donor pins and adaptations remain recorded here.
+The 2026-10-04 outdoor replay observed four-bot combat, return to noncombat,
+Priest Renew casts and native corpse opening, with a clean shutdown. A client
+chat screenshot confirms group loot removal in all four strategy lists. It does
+not confirm aggregate ACK timing, framed STATE refresh or restoration.
+
+## Group strategy client/server timeout contract — 2026-10-04
+
+The pinned MultiBot `80148dff` reader and installed Cata compatibility candidate
+expire a pending strategy token at five seconds. The prior six-second server batch
+deadline would produce a late ACK that the reader discards. Cata group aggregation
+now closes unresolved work at four seconds. Removing the pending entry revokes
+its weak map-execution lease, so still-queued toggles cannot run after the reply;
+already executed changes remain counted and are not rolled back. The native
+strategy mailbox still expires at five seconds, and ordinary/BOT requests keep
+their existing transport. Pure tests cover the new deadline and timer wrap.
+The checked-in Lua 5.1 mock now drives the actual patched Cata addon response
+reader and five-second callback: an ACK while pending is accepted, and a late
+ACK is rejected without a second callback. It does not simulate server latency
+or replace the bundled client replay. The Windows modules-enabled worldserver
+build and all 318 tests pass; Linux and in-game validation remain open.
+
+## Opt-in group dispatch and world completion delivery — 2026-10-04
+
+Donor basis remains bridge `1da05982` RunStrategyMutationCommand,
+BotMatchesCombatScope/SendStrategyMutationAck and addon `80148dff` STRATEGY_ACK.
+The donor synchronous loop is adapted to Cata map ownership. ALL intersects the
+native authorized roster with controlled bots; GROUP/PARTY are current-group
+aliases including raids, and RAID additionally requires a raid. At most 128
+copied members are frozen before posts; oversized batches do not partly execute.
+Existing replay/rate, security, phase and safe-idle checks remain authoritative.
+
+The world-owned table caps 32 batches and one per account, with non-repeating
+in-process generations. Copied binding holds account/group/scope and weak opaque
+login/cancellation markers, not native pointers. Logout atomically rotates the
+login marker. Map execution rejects replacement logins, revoked leases and changed
+native membership. Admission rejection is failure; queued work remains unknown.
+The world pump drains copied results and resolves current account/character/login
+before replying once. Lost logins abandon replies. Transfer/group/gate cancellation
+revokes unexecuted work without rollback; missing results remain unknown at the
+four-second deadline. Refresh STATE before retrying a toggle.
+
+`Playerbots.StrategyControl.GroupMutations = 0` is a separate opt-in requiring
+the base and AddonMutations gates. No runtime config changed. Ordinary/BOT requests
+retain generation zero. Six additional pure tests cover scope/login binding,
+atomic limits, out-of-order/admission results, abandonment/generation protection,
+cancellation and timer wrap. Final reviewed Windows worldserver built and all 318
+checks passed; both-modules-disabled worldserver built with 19/19 checks passing.
+Review preserved the BOT rejection path and tightened native IsMember checks at
+admission/execution. Linux and bundled replay remain pending. Pure tests/compilation
+are not native group-command timing or gameplay acceptance, nor full strategy parity.
+
+## Native group correlation and completion inbox — 2026-10-04
+
+The existing strategy request hook now carries an optional copied batch generation.
+Ordinary and BOT requests keep generation zero and their existing reply path.
+A group request requires a valid token, an empty BOT target and a supported
+mutation; query-only or mixed group/BOT metadata rejects before admission.
+Mailbox capacity, cancellation and five-second expiry are unchanged.
+
+Map execution retains the existing controller/security/phase/idle checks and
+publishes the strategy snapshot before submitting a copied terminal result.
+`StrategyCompletionInbox` synchronizes map producers and one future world
+consumer, caps storage at 4096 results and rejects invalid or nonterminal records.
+It contains no native pointers, session references or packet delivery. Overflow,
+cancellation and expiry do not synthesize success/failure; missing results must
+remain unknown at the batch deadline. Duplicate/stale filtering belongs to the
+world-owned batch policy, not the transport.
+
+This is the Cata asynchronous adaptation of the same bridge/addon pins documented
+below, not a new donor feature. Five additional tests cover native mailbox
+correlation/regression, cancellation/expiry, bounded copied transport, batch
+correlation and concurrent producers/drain. Windows modules-enabled worldserver
+built and all 312 checks passed. With both optional modules disabled, worldserver
+also built and all 19 core-only checks passed. Linux validation remains pending:
+the Docker daemon endpoint was rechecked and is absent; no host settings changed.
+These are copied-policy/transport checks, not native group-command gameplay proof.
+
+No addon group dispatch is enabled and no producer can currently be reached by
+client group commands. Authorized scope selection, bounded pending batches,
+requester-session binding, execution-time membership checks and the world-thread
+delivery pump remain required together. The future pending table must admit at
+most 32 batches of 128 members; inbox overflow still needs honest timeout handling.
+Group controls continue to return UNSUPPORTED_SCOPE.
+
+## Group strategy completion policy, not runtime fanout — 2026-10-04
+
+Bridge and addon main were refreshed, unchanged at `1da05982` and `80148dff`.
+Source basis: bridge RunStrategyMutationCommand/SendStrategyMutationAck aggregate
+counts/reasons and addon Core/MultiBotComm.lua STRATEGY_ACK parsing. The donor
+applies changes synchronously; Cata requires completion across owned map updates.
+
+`PlayerbotStrategyBatch` is a pure aggregation prerequisite, not an enabled
+feature. It freezes at most 128 unique copied bot IDs, validates the same bounded
+state/strategy grammar, binds requester/token/state and a nonzero generation,
+rejects queued-as-success/stale/foreign/duplicate results and emits one ACK only
+when all results settle or its four-second deadline expires. Known admission
+rejection counts as failure; unresolved results remain unknown on TIMEOUT.
+The reader permits succeeded+failed below matched and exposes reason, although
+its partial/failed UI label does not itself communicate rollback semantics.
+
+Six new policy cases cover copied/limited identities, no match, correlation,
+admission versus completion, complete/mixed outcomes, timeout and timer wrap.
+Final reviewed Windows tests-common validation passed all 307 checks.
+Runtime source was unchanged; the preceding
+301-case worldserver build remains the current runtime build. Linux Docker was
+rechecked and the daemon endpoint remains absent; no host settings were changed.
+No native hook, group dispatch, inbox, roster permission or packet pump was added.
+Group controls still return UNSUPPORTED_SCOPE. See the matching core's
+PLAYERBOTS_GROUP_MUTATION_PACKET.md before connecting this policy to runtime.
+
+## Optional donor focus strategy and hostile self-area metadata — 2026-10-04
+
+Refreshed upstream master, unchanged at
+`037c01418b5d01506917a3db9b44fd56ac5f965c`. Source basis:
+`src/Ai/Base/Strategy/ThreatStrategy.cpp` (FocusMultiplier::GetValue and
+FocusStrategy::InitMultipliers). The donor suppresses non-healing AoE and
+CastDebuffSpellOnAttackerAction, but keeps other actions. The Cata adapter uses
+explicit action metadata instead of RTTI against donor spell-action classes:
+`isHealingAction` and `isDebuffOnAttacker`, both false by default. Future area
+healing/attacker-debuff actions must declare their category. Current support
+actions remain non-area and are not blocked; this adds no attacker-debuff action.
+
+The pure multiplier/strategy is registered alongside threat in supported contexts.
+It is optional, never a class default, and accepts safe-idle `co` add/remove/toggle
+or single-bot C-state MultiBot changes under the existing strategy-control gates.
+Base-gate disable removes focus while restoring class utility defaults. Role/spec
+metadata, group routing and native cast ownership remain unchanged.
+
+The existing MageSpellAction adapter previously marked every self-targeted action
+as threat-free. Its hostile self-centered action (Frost Nova) now has AoE metadata,
+while positive self buffs remain None and current enemy-targeted actions remain
+Single. Thus existing Frost Nova participates in both optional focus suppression
+and the shared donor area-threat guard. No new area spell, density selection,
+ground targeting or pull/crowd-control safety system is enabled. This metadata
+mapping is scoped to the existing Mage adapter, not a general spell classifier.
+
+Windows worldserver built and all 301 checks passed. Three new cases cover
+focus categories/null action, the Mage target/positivity mapping and a production
+focus-multiplier engine replay (area/attacker-debuff blocked, healing/single-target
+allowed, removal restores area actions). Control/default-restoration checks now
+cover optional focus. These do not qualify native spell data or gameplay; observe
+registration/timing and existing Frost Nova behavior in the same deferred replay
+when the encounter permits it. Newer Linux validation remains pending. No core,
+runtime, database, installed-addon or publication changes were made.
+
+## Combat utility strategy controls — 2026-10-04
+
+Refreshed donor master, unchanged at
+`037c01418b5d01506917a3db9b44fd56ac5f965c`. This extends the existing donor
+Engine::ChangeStrategy / ChangeStrategyAction vocabulary and MultiBot bridge
+RunStrategyMutationCommand transport pinned at `1da05982e478cb00e0b6c87314afe7e0e9653ffb`;
+no replacement engine or role/spec command system is introduced.
+
+The state-specific mutation allowlist now permits `co` threat/potions as well as
+`nc` food/loot, with add/remove/toggle and optional query. Dead state is query-only.
+One shared allowlist drives admission and map-thread engine execution; mixed or
+cross-state batches reject atomically. Native authorization/controller/phase,
+safe-idle and expiry checks are unchanged. Roles/specs/cure/stay remain protected.
+Global recovery/loot/class gates still apply: registering a strategy cannot enable
+disabled item use or create spells/items. The threat strategy does not govern
+Warrior native auto-attacks or direct/manual execution.
+
+Combat utility defaults are installed once while controls are enabled, so a
+removed strategy is not immediately re-added by the next map update. Disabling
+the base control gate restores potions for supported contexts and threat for
+Mage/Priest; Warrior's default remains no threat multiplier. Class/spec/cure/healer
+defaults continue independently and cannot be removed through these controls.
+Overrides are session-local; logout restores defaults through a new behavior.
+
+Single-bot structured mutations now accept C threat/potions and N food/loot.
+Copied request state determines the completion ACK's C/N field; queue admission
+is not success. Snapshot publication still precedes delivery. Group/fanout,
+self-bot, role/spec overrides, persistence and reset remain unsupported. No new
+capability, core hook or installed-addon change is required; the existing
+opt-in STRATEGY_MUTATION_V1 remains a bounded subset. Timeout remains an unknown
+outcome: refresh before retrying a toggle.
+
+Windows worldserver built and all 298 checks passed. Two new cases cover combat
+state/allowlist/copied correlation and default restoration preserving unrelated
+strategies; existing ACK coverage now checks combat success/failure state fields.
+These do not prove native chat/addon timing. Include one idle combat-utility
+toggle/restore in the existing deferred replay. Newer Linux validation remains
+pending; no runtime/config/database/publication changes were made.
+
+## Shared secondary-caster interrupt targeting — 2026-10-04
+
+Refreshed donor master, unchanged at
+`037c01418b5d01506917a3db9b44fd56ac5f965c`. Source basis:
+`src/Ai/Base/Value/EnemyHealerTargetValue.cpp`,
+`src/Ai/Class/Mage/MageActions.h` and `Strategy/GenericMageStrategy.cpp`,
+`src/Ai/Class/Warrior/WarriorActions.h` and `Strategy/FuryWarriorStrategy.cpp`.
+The existing shared interrupt adapter now registers the qualified GUID value
+and donor-named `counterspell on enemy healer` / `pummel on enemy healer`
+trigger/action routes at the existing interrupt priority (40).
+
+The donor's "enemy healer" means an interruptible positive cast, including
+buffs, not a creature-role classification or only a direct HEAL effect. Native
+Cata generic/channel cast state and CanBeInterrupted remain authoritative.
+The existing engaged-PvE attacker GUID value provides deterministic candidates;
+each is re-resolved on the map, excludes the current target and must still be
+fighting the controller/nearby attached party. Control-protected, invisible,
+unreachable, evading and player-controlled targets reject. Native spell
+preflight filters range/cost/immunity before selecting a candidate, allowing a
+later usable attacker when an earlier caster is out of range.
+
+Execution resolves and checks the GUID/cast again, then uses the existing learned
+spell/native cast helper. Cooldown/global-cooldown, transfer, controller distance
+and own-cast guards remain in force. No Attack call, selection change, movement
+or secondary-target chase was added; no native Creature/Spell pointer survives
+the map update. Current-target interrupts may still serve an ungrouped bot's
+existing combat; only secondary targeting requires attached-party engagement.
+These routes reuse the existing default-off Warrior/Mage combat gates. Cata
+Pummel is used rather than importing WotLK Shield Bash/stance prerequisites.
+No own-cast cancellation, Priest interrupt, NPC role inference, cross-bot
+reservation or full interrupt coordination parity is claimed.
+
+The final reviewed Windows worldserver/tests-common build passed all 296 checks.
+Existing trigger coverage now checks both primary
+and secondary names/priorities; one new pure policy case covers admission and
+exclusions. It does not prove native range/cost/cast races or landed interrupts.
+Observe this in the same deferred replay only when a durable secondary enemy
+casts a positive interruptible spell; otherwise leave runtime coverage deferred.
+Newer Linux validation remains pending. No core hooks/runtime/addon changes.
+
+## Donor healthstone fallback and shared recovery-stock classification — 2026-10-04
+
+Refreshed donor master, unchanged at
+`037c01418b5d01506917a3db9b44fd56ac5f965c`. Source basis:
+`src/Ai/Base/Strategy/UsePotionsStrategy.cpp`, its healthstone action-node factory
+and critical-health trigger, plus `src/Mgr/Item/ItemVisitors.cpp`
+(FindPotionVisitor) and the preceding native item-use adaptation.
+Native Cata `src/server/scripts/Spells/spell_warlock.cpp` owns the 6262
+Healthstone heal script; no WotLK rank/item-name list or healing formula is copied.
+
+The shared critical-health route now prefers `healthstone`, with the donor
+`healing potion` alternative. The carried item must be a non-potion consumable
+whose first valid on-use spell is native 6262 and passes the shared instant,
+positive, combat-usable direct-heal classifier. Native inventory usability,
+item/category/global cooldowns and typed item requests remain authoritative.
+The module's last-potion filter applies to potions, not healthstones; native spell
+checks still make the final decision. No stone creation, distribution, Warlock
+class support, script changes or cooldown bypass is added. Existing execution
+guards and the default-off `Playerbots.Potions.Enabled` option apply to both.
+
+Readiness stock and potion execution now share `RecoverySpell`. Previously the
+stock scan could count flasks or restorative effects after the first usable
+effect, even though execution would reject them. Counting now matches the
+bounded instant potion types actually supported. It intentionally ignores
+current health/mana need and cooldowns: carried stock is not cast readiness.
+Healthstones do not substitute for the explicit healing-potion stock requirement.
+Food/drink stock classification is unchanged.
+
+Windows worldserver built and all 295 checks passed. Two new cases cover
+healthstone classification/lockout/action-node wiring and an engine-level
+preference/fallback replay with available, unavailable and rejected actions.
+Native item effects, potion/stone cooldown timing and newer Linux validation
+remain pending; the pure/stubbed tests are not in-game acceptance. The stopped
+fixture, core hooks, databases and installed addon were not changed.
+
+## Shared carried combat potions — 2026-10-04
+
+Refreshed donor master, unchanged at
+`037c01418b5d01506917a3db9b44fd56ac5f965c`. Source basis:
+`src/Ai/Base/Strategy/UsePotionsStrategy.{h,cpp}`,
+`src/Ai/Base/Actions/UseItemAction.{h,cpp}` (UseHealingPotion/UseManaPotion),
+and `src/PlayerbotAIConfig.cpp` (critical health 25%, medium mana 40%).
+The shared `potions` combat strategy is registered in Warrior/Mage/Priest
+contexts. Trigger/action priorities retain the donor medium-heal-plus-one and
+emergency ordering. Healthstones and their donor fallback are not yet ported;
+healing potion is the direct health route. Distinct internal trigger names avoid
+colliding with class defensive/healing triggers. Roles/spec metadata is unchanged.
+
+Default-off `Playerbots.Potions.Enabled` gates execution independently of rest.
+Only alive, controlled companions already in combat attempt carried, usable
+instant healing or mana potions. Casting, transfer, controller loss/distance,
+rest/loot, mounting/flight/vehicle, charm/control effects and arenas prevent use.
+Native last-potion state and item/category/global cooldowns remain authoritative.
+Inventory scans return copied GUIDs; execution resolves the current item again
+and checks its inventory position, ownership/usability and first valid on-use
+spell. Only positive, instant, combat-usable direct heal/mana-energize spells
+match. Bank stock, flasks, healthstones and channeled recovery are not used.
+
+The existing typed native item request owns spell checks, item consumption,
+cooldowns and restoration. No spell grant, synthetic item, direct health/power
+write, movement cancellation or database operation was added. Item pointers
+are not retained across updates or dereferenced after submission (native use
+may delete them). `PB-POTION` logs submission only, not success/effects.
+Strategy control still cannot mutate this combat strategy; no extra MultiBot
+capability is advertised. Missing stock allows ordinary engine fallbacks.
+
+The final reviewed Windows worldserver/tests-common build passed all 293 checks.
+Three new pure tests cover threshold/invalid-value
+boundaries, busy/disabled/last-potion policy and trigger/priority registration.
+They do not prove native item effects or cooldown timing. Include carried-potion
+use in the existing deferred party replay; Linux validation of newer work remains
+open. Core hooks and the runtime fixture were not changed.
+
+## Shared area-threat prerequisite — 2026-10-04
+
+Refreshed upstream master, unchanged at
+`037c01418b5d01506917a3db9b44fd56ac5f965c`. Source basis:
+`src/Ai/Base/Strategy/ThreatStrategy.cpp` (ThreatMultiplier::GetValue) and
+`src/Ai/Base/Value/ThreatValues.cpp` (ThreatValue::Calculate overloads).
+This extends the earlier `7bae1b5c` single-target adaptation, not the donor's
+entire attacker scan or AoE spell system.
+
+The `threat::aoe` qualifier now takes the maximum tank-relative threat ratio
+over the existing native engaged-PvE attacker GUID value. Each GUID resolves
+again on the current map and must still pass the existing alive/visibility,
+range, engagement, crowd-control and ownership filters. The common per-target
+calculation retains recognized human/bot tanks, fleeing behavior and safe
+zero/nonfinite/saturating arithmetic. No native target pointer is cached.
+
+Scheduled AoE damage now passes both donor guards: attacker maximum below 50%
+and current-target threat below 80%. Single-target damage retains its 80% guard;
+non-damage support, ungrouped bots and the one-shot neglect flag remain exempt.
+No new offensive AoE action is enabled. This guard does not establish splash
+geometry, crowd-control avoidance or pull safety for future area spells, nor
+does it govern Warrior native auto-attacks or direct/manual execution.
+
+Windows worldserver/tests-common built and all 290 checks passed. Two additional
+pure-policy cases cover maximum/empty/discarded inputs and both cutoffs/exemptions.
+They do not execute native threat references or establish in-game AoE behavior.
+Linux validation of newer work and the deferred bundled party replay remain open.
+Core hooks were unchanged; the preceding core-only 19-check result still applies.
+
+## Bounded MultiBot strategy mutation acknowledgements — 2026-10-04
+
+Resumed the interrupted implementation and rechecked bridge upstream HEAD,
+unchanged at `1da05982e478cb00e0b6c87314afe7e0e9653ffb`. Source basis:
+`src/MultiBotBridge.cpp`, RunStrategyMutationCommand and SendStrategyMutationAck.
+The upstream reader contract checked previously at `80148dff` requires
+scope, encoded target, token, C/N state, matched/succeeded/failed counts and reason.
+
+`RUN~STRATEGY~scope~target~token~state~encoded-changes` now has strict bounded
+field decoding and donor-shaped STRATEGY_ACK replies. A separate default-off
+`Playerbots.StrategyControl.AddonMutations` requires the base strategy-control
+gate and advertises `STRATEGY_MUTATION_V1` only when both are enabled. This is a
+bounded implementation of the capability, not full strategy parity: only BOT
+scope, N state and food/loot operators execute. Valid group scopes, combat roles
+and unsupported strategies receive explicit failure/no-match reasons. Self-bot,
+group fanout, persistence and role/spec overrides remain unimplemented.
+
+The world handler uses native roster/control authorization and the existing
+per-account rate/replay guard before queueing. Correlation token and target are
+copied through the same session mailbox; ordinary chat remains unchanged.
+Map execution rechecks controller, phase, native security, feature gates and
+idle conditions. Changed or unchanged accepted registrations count as success;
+globally disabled rest/loot remains disabled. No acknowledgement claims item use,
+loot awards or combat behavior. Rejections count as failures, not queued success.
+
+Completion ACK is emitted only after map execution and publication of the updated
+registration snapshot. The requester is freshly resolved for delivery. Expiry,
+transfer/control cancellation or an unavailable recipient may instead reach the
+client's timeout: that is an unknown outcome, not proof of no mutation. Refresh
+STATE before retrying a toggle; explicit add/remove are preferable for retries.
+Malformed/oversized envelopes reject before mutation; target identity is never
+replaced to squeeze a success acknowledgement into the 250-byte budget.
+
+Windows worldserver/tests-common built and all 288 checks passed, including six
+new cases for field decoding, result counts/budget/overflow, replay protection,
+copied correlation and invalid mailbox metadata. Fixed the omitted test-only
+lifecycle guard include during resume. The current modules-disabled worldserver
+and tests-common also built and passed all 19 core-only checks with Playerbots and
+AHBot disabled. Linux/native client execution remain pending. No installed addon,
+runtime service, database, commit or remote publication was changed.
+
+## Read-only MultiBot strategy framing — 2026-10-03
+
+Refreshed bridge upstream HEAD, unchanged at
+`1da05982e478cb00e0b6c87314afe7e0e9653ffb`. Source basis:
+`src/MultiBotBridge.cpp`, AppendStateFramesForBot, AppendStateFramePacket and
+SendStatesFrames. Checked the current MultiBot-Chatless reader at
+`80148dff3f3a25a56d38dba0ecbd4f165b8c1d3f`, fetched without changing the installed
+addon. This adapts the existing protocol rather than inventing a Cata UI format.
+
+`GET~STATE~encoded-name~token` and `GET~STATES~token` return donor-compatible
+STATE_BEGIN/ITEM/END and global STATES_BEGIN/END frames. Item scopes are C/N,
+indices are one-based, names are percent-encoded and end counts match begins.
+Only `STATE_FRAMING_V1` is added when the existing default-off strategy-control
+gate is enabled; structured strategy mutation/self-bot capabilities remain absent.
+Legacy unframed requests are not implemented or silently treated as framed.
+
+Cata uses an immutable map-published session snapshot rather than donor direct
+cross-thread engine reads. It contains bot/controller identities, capture time
+and copied combat/noncombat names, never native objects. Changes publish at the
+end of the map update; unchanged data is refreshed at most once a second. Native
+world-thread roster security is reapplied per query. Ordinary callers must match
+the captured controller; native GM read authority also covers unattached bots,
+without broadening mutation permissions. Identity/freshness checks reject old
+sessions or data five seconds old; transfer/missing snapshots abort
+the whole request. These are registration snapshots, not current effects,
+eligibility, role overrides, dead-engine export or dungeon readiness.
+
+Requests use a separate per-account four-per-two-second state-query guard within
+the existing bounded requester cache. Complete responses are preflighted before
+any BEGIN: at most 128 bots, 256 strategies/scope, 192 bytes/name and 256 packets
+per transaction, each at most 250 bytes. Overflow, duplicate names or malformed
+requests do not yield truncated success. No runtime services were started.
+Windows worldserver/tests-common built and all 282 checks passed after final
+GM-read review, including five new framing/request/freshness cases. The current
+modules-disabled worldserver/tests-common also built and passed all 19 core-only
+checks with Playerbots and AHBot disabled. Linux/client consumption remain unverified.
+
+## Default-off bounded strategy chat transport — 2026-10-03
+
+Uses the same donor `ChangeStrategyAction` pin below; upstream master was
+rechecked unchanged. `Playerbots.StrategyControl.Enabled` defaults off.
+Ordinary whisper and subgroup-aware party/raid routing now recognize exact
+`co`, `nc`, `de` prefixes. Bare prefixes or `?` query registrations in that
+engine. Only noncombat `food` and `loot` accept add/remove/toggle; roles/specs,
+threat/support, stay, reset, qualifiers and unported strategies are rejected.
+Addon-language chat and structured MultiBot mutation capabilities are unchanged.
+
+A narrow core hook carries a single copied requester/state/operator request,
+limited to 253 transport bytes, 16 operators and five seconds. World admission
+checks native full-control authority and attachment; map execution resolves
+identities afresh and rechecks controller, phase, authority and transfer state.
+Acceptance means queued, not changed. Mutations require safe idle conditions;
+queries read registrations, not enabled config/cast eligibility or dungeon readiness.
+Successful map execution reports changed/unchanged and, when requested, the final
+sorted strategy list. No engine/context pointer crosses sessions or threads.
+
+Noncombat defaults are initialized once while the feature is enabled, so valid
+removals are not immediately undone. Disabling the feature restores defaults;
+logout loses overrides. Global rest/corpse-loot feature gates remain authoritative.
+Already active rest/loot work must finish before a mutation; this transport does
+not cancel native casts, loot or movement. Spec refresh and lifecycle stay retain
+ownership because they are not in the mutable allowlist. Later native control
+requests and transfer cancel pending requests, including before near-teleport ACK.
+Windows worldserver/tests-common built and all 277 checks passed after correcting
+the phase guard to Cata's native `IsInPhase`. Four new cases cover transport
+boundaries, protected strategies, copied single-use/expiry/cancellation and timer
+wrap. Native authority/behavior and Linux validation remain pending. Windows
+module-disabled worldserver/tests-common also built and all 19 core-only checks
+passed for the new strategy-hook snapshot, with Playerbots and AHBot disabled.
+
+## Bounded strategy-operator engine layer — 2026-10-03
+
+Rechecked upstream master at `037c01418b5d01506917a3db9b44fd56ac5f965c`.
+Source basis: `src/Bot/Engine/Engine.cpp`, `Engine::ChangeStrategy`, and
+`src/Ai/Base/Actions/ChangeStrategyAction.{h,cpp}`. MultiBot already uses the
+donor's comma-separated add/remove/toggle/query vocabulary. Local
+`Engine::ChangeStrategies` implements those operators for one selected engine.
+
+Cata adaptations: requests are limited to 250 bytes and 16 tokens; malformed,
+unsupported, qualified/aliased or unauthorized names reject the whole batch.
+The caller must supply an explicit state-specific mutable allowlist. Adding a
+strategy cannot implicitly replace a protected sibling. Changes are staged
+before modifying registrations/queues; unchanged and query-only batches retain
+queued work. A changed batch clears stale continuers/last-action state and
+rebuilds strategy metadata. Query is a result flag, not a chat response or an
+intermediate snapshot. Context factory caching may occur during validation;
+rejection leaves engine registrations and queues unchanged.
+
+This layer is internal only. No `co`/`nc`/`de` chat or addon mutation capability
+is advertised. Reset (`!`), repository persistence and donor random-account
+permissions are not ported. Next transport work must carry copied identities,
+revalidate native authority on the map thread, choose per-state allowlists and
+define interactions with spec/role refresh and lifecycle-owned stay. A context
+registration by itself is not permission to enable it in every state.
+
+Windows worldserver/tests-common built and all 273 checks passed, including six
+new engine cases for operators, atomic rejection, queue preservation/cleanup,
+sibling protection, state isolation and bounds. Linux validation and the
+accumulated gameplay replay remain pending; no new client check is needed solely
+for this unexposed engine layer.
+
+## Default-off stay control/lifecycle wiring — 2026-10-03
+
+This completes the owning control layer for the saved-position foundation below,
+using the same donor revision. `Playerbots.Movement.Stay.Enabled` defaults off.
+When disabled, ordinary `stay` remains the old hold alias. When enabled, `stay`
+posts a five-second, single-use copied requester identity through a narrow session
+hook. Map execution rechecks the current controller, native full-control security
+and safe idle ground conditions. Busy requests are rejected, not falsely reported
+as a completed mode change. A map confirmation reports the captured position.
+`hold` remains the plain hold; no arbitrary coordinate/persistence transport exists.
+
+Activation preserves the controller, clears native follow and automatic assist,
+cancels queued decisions/competing movement and enables stay only in the noncombat
+engine. Loot acquisition and combat reach cannot start while staying; support reach
+still requires ordinary follow/assist. In-range support/rest may run, and returns
+yield to casting/recovery or nearby party combat. This is not donor combat-stay:
+the current explicit attack route still requires following. Follow/hold/stop and
+other movement/control requests release the anchor. Queued stay requests are
+canceled by later control requests. Native death, controller loss, map/instance,
+transfer and either participant's copied phase/terrain identity changes invalidate
+stay. Near-teleport invalidation occurs before native acknowledgement clears the
+semaphore. No ghost return or implicit follow after invalidation was introduced.
+
+Native returns use a distinct PBST point-movement ID. A narrow read-only native
+getter permits exact point-generator cleanup; no generator/player pointer is
+retained across updates. Only matching Player point movement is canceled. Native
+path rejection retries no faster than five seconds, without arrival claims.
+Read-only phase flag/personal-GUID getters support snapshots containing only
+numeric IDs/flags, not Condition/Terrain/native pointers. Phase comparison is
+exact for the exposed active phase/terrain/UI-map sets.
+
+Five additional pure cases cover mailbox one-use/cancellation/expiry/wrap, phase
+identity changes, lifecycle/owned-ID admission and retry timing. Chat tests now
+distinguish Stay from Hold; disabled compatibility remains an adapter branch.
+Windows worldserver/tests-common built and all 267 checks passed after final
+cancellation cleanup. The regenerated current core with Playerbots and AHBot
+disabled also built worldserver/tests-common and passed all 19 core-only checks.
+Linux and bundled control/path/lifecycle behavior remain pending. No realm,
+commit or push started. Older module-off pending notes below are superseded for
+this Windows snapshot, not for Linux/runtime evidence.
+
+## Saved-position/stay foundation — 2026-10-03
+
+Upstream master was rechecked at `037c01418b5d01506917a3db9b44fd56ac5f965c`.
+Donor references: `src/Ai/Base/Value/PositionValue.{h,cpp}`,
+`Actions/PositionAction.{h,cpp}`, `Actions/StayActions.cpp`,
+`Strategy/StayStrategy.cpp` and `ReturnToStayPositionTrigger` in GenericTriggers.
+The supported Warrior/Mage/Priest contexts register the `position` value,
+`set stay position`, `return to stay position`, `stay` actions and donor-named
+stay strategy/return trigger. None is automatically activated. The ordinary
+`stay`/`hold` command is still the existing hold alias, not a saved-position mode.
+
+Cata adaptations: the value owns its map rather than referencing an unconstructed
+member; capture accepts only finite coordinates and a nonzero controller identity.
+Snapshots also bind map and instance, including valid map/coordinate zero.
+Return uses the current companion 3-yard tolerance and 35-yard reaction envelope:
+idle bots displaced within it request native path-generated MovePoint, while a
+safe farther displacement recaptures the current position instead of teleporting.
+Native moving bots are not repeatedly redirected. Busy/combat/nearby-party combat,
+casting, rest, loot, rebuff, transfer, transport, flight/fall and native movement
+restrictions yield. Queries do not reanchor; only an executed action can do so.
+Move submission is not confirmed path success or arrival.
+
+Not ported: permissive donor atof/atoi persistence, arbitrary coordinate commands,
+qualified single-position/current-position history, random return/guard travel,
+sit timers or active combat stay. Before activation, the owning control batch
+must cancel competing follow/support/loot requests, explicitly clear anchors on
+controller/follow/death/transfer/phase changes and own return-movement cleanup.
+Registration alone does not establish these lifecycle guarantees. No new chat
+transport, core hook, runtime flag or active strategy was added in this slice.
+Five pure/value/strategy cases cover identity, finite capture, return boundaries,
+per-value isolation/reset and donor priority/default metadata. Native actions
+and control behavior still require acceptance after control wiring.
+Windows worldserver/tests-common built and all 262 checks passed. Linux remains
+pending. Core source did not change in this slice, so its preceding module-off
+Windows build and 19 core-only checks remain applicable. No realm was started.
+
+## Current platform boundary review — 2026-10-03
+
+The current Windows modules-enabled worldserver/tests-common build passed all
+262 checks including the subsequently added saved-position foundation. A regenerated matching core build with Playerbots and AHBot disabled
+passed worldserver linking and all 19 core-only checks. This supersedes earlier
+Windows module-off pending notes below, not their outstanding Linux/client
+acceptance. Docker's Linux engine is unavailable; an existing Ubuntu installation
+lacks the alternative build toolchain/dependency setup. No replacement packages
+were installed. The stopped party fixture remains prepared while the user is
+remote. No runtime, commit or push was performed for this validation pass.
+
+## Learned ground-mount following — 2026-10-03
+
+Donor: `src/Ai/Base/Actions/CheckMountStateAction.{h,cpp}` at upstream master
+`037c01418b5d01506917a3db9b44fd56ac5f965c`, rechecked before this port.
+The bounded adaptation follows a mounted controller using already learned,
+active ground-mount spells. `Playerbots.Mount.Ground.Enabled` defaults off.
+It uses native Cata riding and mount-capability records, spell overrides, cast
+validation and movement. Speed preference comes from native spell/capability
+effects, with a stable learned-spell ID tie break; no training or spell grant.
+
+The existing map-thread follow adapter owns coordination. Accepted casts pause
+follow refresh; rejection/interruption resets the formation signature so native
+follow can resume. Retry is bounded to five seconds and an owned cast to ten.
+Commands, controller changes/dismount, combat (including nearby party combat),
+rest, loot and pending rebuff release only this adapter's recorded cast/aura.
+External mount auras are not broadly removed. Death/transfer/flight/falling/
+vehicle states suspend coordination; ownership is reconsidered on a safe update.
+No native Player/Spell pointer is retained between updates.
+
+This is not the complete donor mount/travel strategy. Flight-capable and
+underwater capabilities, travel forms, preferred/item mounts, battlegrounds,
+autonomous travel, fall/flight-flag cleanup and mount-speed synchronization are
+excluded. Native outdoor/level/riding/form/water/control/range gates remain;
+the donor's Wrath thresholds and special flight spell IDs are not copied.
+Five pure tests cover admission, owned cleanup, ground-only capability policy,
+retry clock wrap/cleanup and candidate ordering. Native data/casting and bundled
+client behavior require separate runtime acceptance. Windows worldserver and
+tests-common built; all 257 checks passed. Linux/module-disabled validation and
+the bundled client replay remain pending. No test realm was started for this port.
+
+## Shared strategy-aware roles — 2026-10-03
+
+Upstream master was rechecked at `037c01418b5d01506917a3db9b44fd56ac5f965c`.
+References: PlayerbotAI::IsTank/IsHeal/IsDps/IsRanged/ContainsStrategy,
+Engine's cached type mask and HealPriestStrategy's HEAL|RANGED metadata.
+The shared helper prefers configured bot strategy roles, with native Cata
+primary-tree/form fallback for ordinary players or uninitialized bots. Wrath
+talent-point/presence/aura heuristics are not copied. Unknown hybrid specs do
+not fabricate a tank/healer role.
+
+A narrow read-only session hook publishes a copied atomic combat role mask;
+core treats the bits as opaque. No peer accesses another bot's live engine or
+AI/context/player pointer. Ordinary sessions/module-off return zero. Unlike
+the donor's all-engine union, combat metadata supplies roles so utility/idle/
+dead strategies do not inadvertently assign or erase a combat role. Peer reads
+can see the preceding map refresh; existing value cache intervals remain.
+Future strategy controls must refresh the snapshot before role consumers run.
+
+Party cure/buff/resurrection ordering, tank threat/rescue/target ranking, DPS
+weighting and melee positioning share the helper instead of duplicated Warrior/
+Priest class shortcuts. Controller-first ordering, native eligibility, flags,
+cast guards and authorized target scope remain. Other human tank/healer specs
+are recognized, not admitted as bot classes; DPS estimation keeps its supported-
+class guard. Priest healing gains donor RANGED metadata; cure is utility rather
+than a healer role by itself. Shadow-spec bots retain their actual implemented
+healer fallback, not a fabricated Shadow rotation.
+
+Five new pure/engine cases cover native roles/forms, healer/damage distinctions,
+unknown specs, strategy precedence, and combat metadata retained through idle/
+dead states and strategy replacement. Windows worldserver/tests-common built;
+all 252 checks passed. Linux/module-off and bundled client acceptance remain
+pending. No new spells or movement geometry; Warrior idle is not proven fixed.
+
+## Ready-check supplies and optional deferred rebuff — 2026-10-03
+
+Upstream master was rechecked and remains
+`037c01418b5d01506917a3db9b44fd56ac5f965c`. Audited ReadyCheckAction,
+ForceRebuff, ItemCountValue, InventoryAction and Mgr/Item/ItemVisitors.
+Native ready replies now include the donor's carried usable food/healing-potion
+requirements, plus drink/mana-potion requirements for mana users. Quantities are
+read fresh from backpack/bags, using native item eligibility and Cata ItemEffect/
+SpellInfo records; equipment/bank contents are not counted. Each stack counts
+once per matching category, with saturating sums. Counts describe possession,
+not demonstrated potion-use functionality or encounter readiness.
+
+Adaptations: food/drink use the first valid native on-use category; recovery
+potions/flasks use native HEAL and mana ENERGIZE effects. Unknown spell records
+are skipped rather than terminating discovery. The donor's arbitrary-food
+fallback for missing drink is deliberately not copied: food alone must not
+satisfy a mana user's water requirement. Wrath ammo/happiness checks are omitted
+for Cata and the supported Warrior/Mage/Priest scope. Unlike the donor's current
+unconditional affirmative confirmation, missing supplies produce not-ready.
+The map-thread supply report is labeled a snapshot, not native reply acceptance.
+
+`Playerbots.ReadyCheck.ForceRebuff` defaults off, like the donor option. With
+native ready handling enabled and eligible learned Mage/Priest party buffing,
+the existing pass is started or an existing manual pass is preserved. A copied
+map-owned deferred identity waits for an explicitly finished pass, then checks
+HP/MP/proximity/state and supplies afresh. Native casts and buff GCD still gate
+pass completion. Death/transfer/combat/controller changes, pass replacement,
+disabled flags and timeout never masquerade as completion. Pass serial/ownership
+prevents stale checks from canceling a newer manual pass. The world update also
+invalidates the mailbox when native group/check/initiator authority no longer
+matches; no Group state is mutated from map work.
+
+The 30-second native check lifetime remains authoritative even though a manual
+rebuff has a two-minute window. Expired checks receive no late confirmation;
+owned ready-check rebuff work is canceled at the next map update. This is still
+only the two supported party-buff routes, not all buff/role/encounter readiness.
+Five new pure cases cover usable stack counts/saturation, required categories,
+deferred wait/finish/reject/cancel, replacement-safe mailbox cancellation and
+explicit pass completion/serial identity. Windows worldserver/tests-common built
+and all 247 registered checks passed after final nearby-party-combat and config
+guard review. Linux/module-off and bundled client acceptance remain pending.
+
+## Native basic ready-check bridge — 2026-10-03
+
+Donor reference remains `037c01418b5d01506917a3db9b44fd56ac5f965c`,
+`src/Ai/Base/Actions/ReadyCheckAction.cpp` and `src/PlayerbotAIConfig.cpp`.
+The donor reports HP/MP, distance and inventory but then sends affirmative
+confirmation regardless of the aggregate checker result. This port does not
+copy that unconditional confirmation, Wrath ammo/happiness checks, or the
+GUID-prefixed request body into Cata.
+
+`Playerbots.ReadyCheck.Enabled` defaults off. An authorized native leader or
+assistant initiation assigns a process-unique world-thread check identity to
+the Group, then posts copied group/check/initiator/timestamp identities to
+server-origin sessions. The map update evaluates basic operational readiness:
+alive/in-world, no combat/attack/transfer/cast/manual rebuff, health >85%, mana
+>65% for mana users, and the initiator on the same map within 100 yards. These
+thresholds follow donor defaults; requiring the actual initiator nearby instead
+of an optional master is a conservative Cata adaptation. This is not the full
+donor supply checklist, encounter readiness, or a buff-coverage guarantee.
+
+A mutex-protected one-slot request/reply bridge supersedes old work when a new
+check arrives and rejects older map completions. Both directions are once-only
+and expire at 30 seconds with unsigned clock-wrap handling. The world update
+re-resolves the current group and initiator, checks actual membership, authority,
+check generation and expiry, and calls the native handler with only one state
+byte. Group mutation/native confirmation never runs in the map update. An
+authorized native finish invalidates queued bot replies; ordinary client answer
+processing and packet broadcast behavior remain unchanged. No Player/Group
+pointer is retained by the bridge.
+
+Automatic rebuff/deferred confirmation and the donor inventory checklist remain
+follow-ons. A manual rebuff currently answers not-ready, rather than reporting
+ready from its eventual completion. Disabled/replaced/expired/invalidated checks
+produce no bot confirmation. Pure tests cover once-only delivery, replacement,
+identity mismatch, expiry/wrap and basic readiness boundaries; native group and
+packet timing still require bundled client acceptance. Windows worldserver and
+tests-common compiled; all 242 registered checks passed, including four new
+ready-check cases. Initial Windows name/API compatibility errors were corrected
+before the successful build. Linux and module-off validation remain pending.
+
+## Manual force-rebuff state and readiness boundary — 2026-10-03
+
+References at donor `037c01418b5d01506917a3db9b44fd56ac5f965c`:
+`src/Bot/ForceRebuff.{h,cpp}`, `src/PlayerbotAIConfig.cpp`,
+`src/Ai/Base/Actions/ReadyCheckAction.cpp` and `GenericBuffUtils.cpp`.
+This slice ports the manual rebuff operation, not automatic native ready-check
+initiation/replies or the donor's full readiness checklist.
+
+Exact ordinary chat `buff` uses existing full-control and party/raid-subgroup
+routing. A narrow native RequestPlayerbotRebuff hook hands one copied requester
+GUID/timestamp to a mutex-protected session mailbox. Busy requests are rejected;
+consumption is once-only with a five-second wrap-safe expiry. The map update
+re-resolves the requester and rechecks authority, transfer/life, existing
+controller, supported Mage/Priest class and party-buff feature flag before Begin.
+Initial transport replies mean requested; the map reply says pass started.
+No generic engine-command interface, Player pointer or Group mutation crosses
+this boundary. Unsupported/unavailable/expired requests do not start the pass.
+
+Map-owned state uses the donor two-minute window and default 60-second refresh
+margin, growing to elapsed+5 seconds. Existing finite-duration aura coverage is
+refreshed only if remaining+margin < maximum; permanent/nonpositive duration
+is not forcibly replaced. Freshly renewed auras therefore do not create a
+perpetual refresh loop. Single/party variants still jointly determine coverage.
+Normal buffing remains absent-only. The margin is currently fixed at the donor
+default; the donor configurable margin and ready-check option are not exposed.
+
+Native review found Spell::CanAutoCast rejects identical existing auras before
+its power/range/cast checks. For aged existing supported buffs on self or actual
+group members only, the refresh path uses native CheckPetCast/CheckCast followed
+by prepare instead of that duplicate-aura autocast shortcut. Learned-spell,
+override, power, GCD/cooldown and native target/cast validation remain. Ordinary
+casts and absent buffs retain CanAutoCast, including its target-selection check.
+An ungrouped attached controller does not gain this special existing-aura refresh
+path. Rejected casts can keep eligible work pending until the bounded timeout;
+native effect application and stronger-aura behavior are not assumed proven.
+
+Engine ticks now pass the pending flag to the existing force-check scheduling.
+Per-cycle eligible/proposed work and the last accepted buff spell ID are tracked.
+Native SpellHistory queries re-resolve the current cast override rather than
+retaining SpellInfo. Noncombat Priest engine heals yield while buff work or its
+GCD is active, a Cata eligibility adaptation of the donor buff-first multiplier;
+combat healing does not yield. Present buff values are re-evaluated during the
+pass instead of relying on the ordinary two-second needed cache.
+The pass ends when no current eligible work, cast or buff GCD remains, or expires.
+The log explicitly means no eligible work, not all-party coverage/readiness.
+Combat pauses rebuff work within the window; death, transfer and controller
+change clear it. No launched spell is forcibly canceled.
+
+Readiness audit: native Cata `WorldSession::HandleRaidReadyCheckOpcode` is
+PROCESS_THREADUNSAFE and its answer branch consumes a single state byte.
+Donor SendReadyConfirm writes a GUID before the state and calls the handler
+directly. That packet/call cannot be transplanted into the map update. The next
+bridge must observe authorized native initiation on the world thread, retain
+only request identity, and validate group/initiator/generation/expiry before a
+world-thread native reply. Do not infer ready from completion of two buff routes.
+No native ready-check response is sent by this slice.
+
+Windows worldserver compiled and all 238 registered checks passed. Four new pure cases cover window/wrap,
+refresh boundaries/permanent auras/combat, cycle identity/cancellation and
+mailbox busy/once-only/TTL behavior; chat grammar also checks exact buff.
+Native GCD/aura effect timing and authorization races remain client acceptance.
+Linux and module-off validation of the new hook remain pending. No realm startup,
+client session, commit or push.
+
+## Named healing and missing-aura target values — 2026-10-03
+
+Donor master was rechecked at `037c01418b5d01506917a3db9b44fd56ac5f965c`.
+Audited `src/Ai/Base/Value/PartyMemberToHeal.cpp`,
+`PartyMemberWithoutAuraValue.cpp`, `src/Ai/Base/Util/GenericBuffUtils.cpp`
+(`BuffBelowRefreshTarget`, `MakeAuraQualifierForBuff`) and
+`src/Bot/ForceRebuff.cpp::BuffBelowRefreshTarget`.
+
+Priest context now registers `party member to heal` as an ObjectGuid value.
+It uses the existing in-range health + distance/10 probe and incoming-heal
+deferral, with immediate map re-resolution. Health triggers test the selected
+patient rather than any member below their threshold; spell-specific actions
+still check all ranked candidates for aura/spell eligibility and native cast
+fallback. This is the donor selection/trigger relationship, not a new promise
+that health always outranks distance. Healing candidate eligibility now also
+rejects unavailable/transferring, GM, charmed and unfriendly members.
+The existing 90% healing cutoff, ungrouped controller support, 30-yard cast
+envelope and separate bounded approach remain Cata adaptations. Donor focus-heal
+targets, pets/charms and the full far-range value are not included.
+
+Shared contexts now register qualified `party member without aura` GUID values.
+Supported donor qualifiers are `arcane intellect,arcane brilliance` and
+`power word: fortitude,prayer of fortitude`, with their single base-name aliases.
+They map to the existing native Cata buff spell and single/party aura IDs, rather
+than Wrath spell records. Other names/lists/classes return no target. This is a
+bounded qualifier adapter, not a general spell-name or comma-list parser.
+Buff checks query the value; execution retains the ordered native cast-attempt
+loop and current idle/learned-spell/controller/map gates. Either native aura
+variant satisfies normal buff coverage.
+
+Donor missing-aura checks pass baseBeforeDuration=0. Outside force-rebuff, an
+existing aura is therefore not proactively refreshed. The Cata value preserves
+that normal absent-only behavior. Duration-based force-rebuff depends on the
+donor pending window, margin, GCD/work tracking and readiness response; those
+must be ported as an owning batch, not approximated by unconditional refresh or
+invented duration thresholds. Existing trigger scheduling support alone is not
+full ForceRebuffState acceptance.
+
+Windows worldserver compiled and all 234 registered checks passed. Three new pure cases cover supported/rejected
+aura qualifiers and healing's distance-probe selection. Real native aura lookup,
+trigger timing and patient selection remain bundled client acceptance. Linux
+is pending while Docker is unavailable. No new core hook, movement owner, DB write,
+realm startup, client session, commit or push.
+
+## Named dispel and resurrection target values — 2026-10-03
+
+Donor master remained `037c01418b5d01506917a3db9b44fd56ac5f965c` when checked.
+References: `src/Ai/Base/Value/PartyMemberToDispel.{h,cpp}` and
+`PartyMemberToResurrect.{h,cpp}`, using the generic party search audited below.
+The shared Cata context now registers `party member to dispel`, qualified by
+numeric native dispel type. Priest context also registers
+`party member to resurrect`. Both expose ObjectGuid instead of donor Unit pointers.
+Consumers use fresh Get lookups; no LazyGet target snapshot or native pointer
+crosses threads. Resurrection re-resolves the GUID through the bot's current map.
+
+Dispel values reuse living role/subgroup candidates and native aura lists. Strict
+full numeric parsing replaces donor atoi; malformed/overflow qualifiers and
+unimplemented class/type combinations return no target. Current routes are Mage
+curse removal (475) and Priest disease removal (528), requiring the native learned
+spell. Party values exclude self to preserve existing separate higher-priority
+self-cure actions, an explicit Cata adaptation. Trigger/usefulness checks use the
+value; execution retains the complete ordered attempt loop so a native rejection
+on the first eligible member cannot starve later targets. Strategy flags and
+command/cast/rest/loot permission remain action responsibilities, not new values.
+
+The resurrection value reuses the existing native 30-yard cast candidate helper,
+including role priority, CORPSE, pending/incoming resurrection and LOS guards.
+It is an in-range cast value, not full donor sight-distance discovery. The separate
+bounded 40-yard approach helper and typed session movement intent are unchanged;
+values do not submit movement or enable autonomous dead-state travel.
+
+Windows worldserver compiled and all 231 registered checks passed. Two new pure
+tests cover supported cure routes and rejected qualifiers; factory wiring and
+real native targets are source-reviewed, not client-qualified. Linux acceptance
+remains at the 219-case subset while Docker is unavailable. Named healing and
+missing-aura values, pets, aura refresh-duration rules and additional dispel/talent
+routes remain separate ports. No realm startup, client test, commit or push.
+
+## Protected combat targets and movement ownership audit — 2026-10-03
+
+Donor master was rechecked at `037c01418b5d01506917a3db9b44fd56ac5f965c`.
+`src/Ai/Base/Value/InvalidTargetValue.cpp::Calculate` rejects polymorphed,
+charmed, feared and isolated current targets, independently of target ranking.
+The Cata fallback ranking previously rejected polymorph, but explicit admission
+and retained combat did not share these donor control exclusions.
+
+One native predicate now applies those exclusions to DPS/tank fallback ranking,
+explicit/automatic admission, retained combat and shared positioning/attack-facing.
+Cata `Unit::isFeared()` supplies the donor fear-aura check. Roots and stuns are
+not blanket exclusions; this is the donor target policy, not a general test for
+every damage-breakable aura. Existing native attackability, PvE, visibility,
+party scope, range/LOS/leash and marker rules remain unchanged. Explicit attack
+does not bypass actual control protection. Marker-only exclusions still belong
+to fallback ranking and are not newly imposed on explicit commands.
+
+Retained protected targets use existing cease cleanup: cancel decision queues,
+clear the target, stop native autoattack and active motion. No newly selected
+victim, global CC registry, aura mutation or forced teleport is introduced.
+Already launched spells/projectiles and existing periodic damage are not canceled;
+this does not promise that ongoing effects cannot break CC. Native runtime timing
+and aura mappings still need integrated qualification.
+
+The same audit covered donor `MovementActions.cpp::ReachCombatTo`,
+`SetBehindTargetAction::Execute` and `MoveOutOfEnemyContactAction::Execute`, plus
+`CombatStrategy.cpp::InitTriggers`. Native Cata
+`ChaseMovementGenerator::Update` already checks angle/distance/LOS, predicts moving
+destinations, uses collision-aware positioning and launches native paths.
+Donor geometry is not a standalone replacement: behind positioning additionally
+uses collision validation and recent-flee history; MoveTo uses duplicate-move,
+wait/priority state. Those dependencies must be ported together if needed.
+The current chase-angle adaptation is not full donor geometry or stuck recovery.
+Mount-state/travel, full stay/return, pets and autonomous ghost movement remain
+separate owning features, not prerequisites for the current level-20 party batch.
+
+Windows worldserver compiled and all 229 registered checks passed. A pure policy case covers each control
+exclusion and clearing; it does not exercise real native auras. Linux is pending
+while Docker is unavailable. No realm startup, client session, commit or push.
+
+## Shared cure and buff candidate search — 2026-10-03
+
+Upstream master remains `037c01418b5d01506917a3db9b44fd56ac5f965c`.
+Audited `src/Ai/Base/Value/PartyMemberToDispel.cpp`,
+`PartyMemberWithoutAuraValue.cpp` and `PartyMemberValue.cpp`. Both dispel and
+missing-aura values use the generic role/subgroup party search, not healing's
+health ordering. The earlier Cata cure health sort and party-buff self-first
+group traversal are superseded by this shared search.
+
+Mage party curse removal, Priest party disease removal and Mage/Priest party
+buff checks/casts now consume one living-support candidate helper. Grouped
+candidates reuse controller/healer/tank/other priority with local-subgroup
+preference and stable ties. Native life, in-world, transfer, same-map, friendly,
+GM/charm, 30-yard and LOS checks filter targets. The attempt helper preserves
+that order, skips ineligible candidates and continues after native cast rejection.
+Healthy members are not removed by a healing cutoff. Self-cure remains a
+separate donor action at its existing higher priority; this is not an emergency
+dispel redesign. Healing keeps its separate health/distance selection.
+
+Ungrouped bots retain the existing self/attached-controller support adaptation;
+the donor generic search is self-only without a group. Grouped support does not
+add an out-of-group controller to the roster. Cata native dispellable-aura lists,
+spell learning, buff aura checks, idle/combat gates and native casts remain
+authoritative. Donor pets, aura refresh-duration utilities, arbitrary aura-name
+lists, magic-dispel talent policy and generic support approaches are not added.
+There is no lifecycle/core hook, DB write or additional movement owner.
+
+Tests now exercise the production candidate-attempt helper without health sorting,
+including full-health members, preserved order, rejection fallback and empty input.
+A combined role-order/eligibility/fallback case covers the shared policy path.
+Windows worldserver compiled and all 228 registered checks passed. Linux remains pending while its
+Docker engine is unavailable; native aura/effect and role behavior still need the
+bundled client replay. No realm startup, client session, commit or push.
+
+## Party support ordering and resurrection eligibility — 2026-10-03
+
+Upstream master was checked at `037c01418b5d01506917a3db9b44fd56ac5f965c`.
+References: `src/Ai/Base/Value/PartyMemberValue.cpp`,
+`src/Ai/Base/Value/PartyMemberToHeal.cpp` and `src/Bot/PlayerbotAI.cpp`
+(`IsHeal` / `IsTank`). Generic donor party selection prioritizes the controller,
+healers, tanks, then others, with local-subgroup preference within each bucket.
+Healing has a separate health/distance policy; this port does not replace it
+with role ordering.
+
+The shared map-thread candidate helper now supplies that ordering to Priest
+resurrection. Native group identity, map, transfer, friendliness, GM and charm
+guards precede ordering; corpse, pending/incoming resurrection, native range and
+LOS checks remain per-target eligibility. Approach discovery checks the
+controller's 20-yard envelope before choosing a corpse, so an ineligible earlier
+corpse cannot hide a later eligible one. Native casting and the existing single
+session movement owner remain authoritative. In-range resurrection can prioritize
+a dead controller; approach still requires a living controller and yields to
+eligible injured living members or nearby party combat.
+
+Cata roles use the active primary talent tree: healing specs, Warrior/Paladin
+Protection, Death Knight Blood, and Feral in native Bear form. Unknown specs
+remain neutral. This classifies existing party members; it does not implement
+additional bot classes or donor strategy-based role overrides. Dead Feral members
+without Bear form remain neutral rather than guessing tank identity. Wrath Frost
+Presence / Dire Bear assumptions were not copied. Equal-role/subgroup ties keep
+native roster order instead of the donor's push-front reversal.
+
+Windows worldserver compiled and all 227 registered checks passed. The two new
+pure tests cover role/subgroup ordering, stable ties and empty candidates; native
+role classification and multi-corpse fallback remain source-reviewed, not runtime
+qualified. Linux validation is pending because Docker's Linux engine is unavailable;
+the older 219-case Linux result does not accept this slice. Pets, released ghosts,
+autonomous recovery and full donor party-value coverage remain unported. No realm,
+client session, commit or push occurred.
+
+## Queued range chat and active-chase refresh — 2026-10-03
+
+The previously audited donor RangeAction vocabulary now connects to normal
+whisper and party/raid chat using the existing per-bot control/security policy
+and raid-subgroup routing. Native core adds only a specific range-request hook;
+it does not expose AiObjectContext or generic arbitrary engine commands.
+The module session owns one mutex-protected copied request (requester GUID low,
+bounded parameter and timestamp). Busy mailboxes reject new requests; consumption
+is once-only and expires requests after five seconds using wrap-safe elapsed time.
+No player/context pointer or global registry crosses the world/map boundary.
+
+Dispatch checks native bot identity and full control before posting. After party,
+movement and instance processing, the map update invokes the named range action
+with a GUID-owned Event. That action independently re-resolves the same-map
+requester and checks full control and transfer state again. Requests discarded
+for expiry/unavailable/transfer/changed authority do not claim success. Initial
+transport replies say requested; only the action's effective-range response
+confirms application. Ordinary group chat delivery is preserved. LANG_ADDON and
+new addon widgets/protocol extensions are not introduced by this slice.
+
+Changing effective spell range marks map-owned refresh intent. On a validated
+Mage combat tick, refresh reuses the current native victim and existing CHASE
+motion only, with the shared engine/owner/PvE/map/LOS/leash/cast/control/rest/loot
+guards. It submits native MoveChase with the new range; casting/control blocks
+defer it rather than being interrupted. It acquires no new target and creates
+no second movement owner. New attack chases already read the context value.
+Friendly healing/resurrection snapshots continue their existing re-evaluation
+cadence. Native spell range, permissions and spell selection remain authoritative.
+
+Examples: `range ?`, `range spell ?`, `range heal 28`, `range spell 0`.
+This queue, TTL, strict bounds and deferred native refresh are Cata adaptations;
+the donor RangeAction itself has no Cata session mailbox. Persistence, shoot/flee
+range support and full donor movement priority/history remain separate.
+
+Windows worldserver compiled and all 225 registered checks passed. New tests cover copied/one-slot/once-only
+mailbox behavior, invalid requests, expiry/clock wrap and exact chat prefix
+extraction. Linux validation could not connect to Docker's Linux engine and is
+pending; no older Linux result accepts these changes. No client session, realm
+startup, commit or push occurred. Runtime authorization races, responses and
+active-chase refresh remain bundled client acceptance items.
+
+## Donor range action and bounded parsing — 2026-10-03
+
+Upstream master remained `037c01418b5d01506917a3db9b44fd56ac5f965c` when
+checked. Audited `RangeAction.{h,cpp}`: the donor named action supports `?`,
+`<qualifier> ?` and `<qualifier> <number>`, setting the qualified manual range
+and reporting override/default values. The donor uses atof and arbitrary
+qualifiers; its all-range query also falls through to a false return after
+printing. Those permissive/error behaviors are not copied.
+
+Warrior, Mage and Priest now register the named `range` engine action together
+with their shared range values. The parser accepts query-all, spell/heal query,
+finite bounded numeric setting and zero reset. Spell overrides must be 2–25 yards,
+heal overrides 2–30. Unsupported qualifiers, malformed/partial numbers,
+nonfinite/overflow values and input over 64 bytes are rejected before context
+lookup. Parsing is locale-independent; responses use the classic locale and
+report effective/default distances. A valid all-range query returns success.
+
+Execution remains map-thread-only. The action resolves the event's requester
+GUID on the bot's current map, checks the existing full-control security policy
+again and rejects transfer/unavailable state before inspecting or changing the
+context. Responses use the current system-message convention instead of donor
+TellMaster. No player pointer, arbitrary qualifier, SQL write or persisted range
+parser crosses a boundary.
+
+This is the engine action layer, NOT a newly enabled whisper/party/addon command.
+The current chat bridge only queues fixed follow/hold/attack/cease controls.
+Next: add a bounded session-owned parameterized handoff, recheck authorization
+when consumed and invoke this named action on the map thread. Do not write
+AiObjectContext values from world-thread chat callbacks or invent a second global
+command registry. Active native chases also need an explicit range-refresh policy;
+changing the value alone does not establish that an existing chase was updated.
+Shoot/flee range support, persistence and per-spell range selection remain separate.
+
+Windows worldserver compiled and all 222 registered checks passed. New tests
+cover query/set/reset grammar, whitespace, limits, malformed/partial/nonfinite
+numbers, unsupported qualifiers and effective/default response formatting.
+Linux validation could not start because Docker's Linux engine was unavailable;
+the previous 219-case Linux result does not validate this slice. No client test,
+realm startup, commit or push occurred.
+
+## Shared donor movement permission — 2026-10-03
+
+Audited upstream master `037c01418b5d01506917a3db9b44fd56ac5f965c`:
+`PlayerbotAI::CanMove`, `MovementAction::IsMovingAllowed`,
+`SetFacingTargetAction::isPossible`, `ReachTargetAction::isUseful` and
+`StayStrategy`. The donor centralizes lost-control, root/charm, frozen/polymorph,
+controlled-motion and travel restrictions. Reach also checks stay/channeling;
+StayStrategy includes an actual return-to-position trigger and stay action.
+
+The shared Cata movement layer now exposes one native CanMove gate, consumed by
+engine facing/reach/behind, session follow/path catch-up, attack-entry chase,
+Warrior stance chase, friendly support approaches and corpse-loot movement.
+It rejects non-world/dead players, teleport/taxi/flight motion, restricted native
+unit states, charm, frozen/polymorph, occupied controlled-motion slots and vehicles.
+Existing spell-cast, mounted, LOS, owner and leash gates remain at their callers.
+Initial follow adoption under a temporary control restriction records an invalid
+formation signature so ordinary following can be submitted after control ends;
+Priest post-combat follow restoration uses the same gate and retry mechanism.
+This does not cancel the core's controlled-motion slot or grant movement authority.
+Existing command teardown/cancellation still owns the active companion motion.
+
+Cata has no donor NULL_MOTION_TYPE sentinel: its GetMotionSlotType returns
+MAX_MOTION_TYPE when empty. The adapter instead checks GetMotionSlot for nullptr.
+The initial build caught that enum difference; the corrected Windows build passed.
+The Cata policy deliberately rejects all vehicle and ghost movement rather than
+copying donor vehicle exceptions/ghost travel. Spirit of Redemption-specific
+handling, swimming/flying flag updates and full movement priority/history remain
+outside this slice. This is a movement-submission gate, not a blanket decision or
+spell-casting suspension policy; legacy spell fallback paths are not newly ported.
+
+Stay audit: current hold clears controller/follow/assist and pending actions,
+so the new target-dependent actions cannot bypass it. Do not call that full
+StayStrategy parity: stay position storage, return movement and combat-while-stay
+semantics remain a later command/position port. No placeholder stay strategy was added.
+
+Windows worldserver compiled and all 219 checks passed. Linux worldserver
+compiled; 219 cases ran with 218 passing and one existing expected failure,
+with no unexpected failures. Pure policy checks cover each restriction independently and recovery
+when it clears; native crowd-control timing and follow/chase resumption remain
+bundled client acceptance items, not proven by the policy tests.
+
+## Specialized resurrection-reach prerequisite — 2026-10-03
+
+Upstream master remained `037c01418b5d01506917a3db9b44fd56ac5f965c` when
+checked. Audited `ResurrectPartyMemberAction::getPrerequisites` in
+`GenericSpellActions.h`, `ReachPartyMemberToResurrectAction` in
+`ReachTargetActions.cpp` and `PartyMemberToResurrect.cpp`. The donor registers
+`reach party member to resurrect` as a specialized prerequisite, uses
+GetRange("spell") for positioning and excludes non-corpse targets, existing
+resurrection requests and incoming resurrection casts.
+
+The Priest resurrection action now exposes that prerequisite. Its named reach
+action submits a typed same-update support intent to the existing movement
+bridge. Healing and resurrection share one owned GUID/destination, native
+MovePoint submission and cancellation/yield path; no second movement owner or
+retained Player pointer was added. Target selection is rechecked before request
+submission, movement and casting. Native Resurrection cast range remains 30
+yards; approach positioning uses the bounded spell range (20 by default).
+
+Approaches require the enabled Priest healing engine, follow/auto-assist,
+a living same-party controller, native map/LOS/friendly/corpse eligibility,
+no nearby attached-party combat and no eligible injured living member within
+healing range. Discovery is bounded to 40 yards from the bot and 20 from the
+controller, with the existing 35-yard bot-controller leash. Stop/transfer,
+casting, mounted/flight/control restrictions and rest/loot cancellation remain.
+Incoming resurrection and new resurrection requests invalidate selection.
+
+Those companion bounds, group iteration order, living-controller requirement,
+live-patient preference and snapshot path ownership are Cata adaptations, not
+full donor target ranking/travel. Released ghosts, a dead controller requiring
+approach, autonomous recovery and full path/stall handling remain unported.
+Existing in-range resurrection still uses native cast checks; this batch does
+not change death state, create a corpse or grant resurrection directly.
+
+Windows worldserver compiled and all 218 checks passed. Linux worldserver
+compiled; 218 cases ran with 217 passing and one existing expected failure,
+with no unexpected failures. New checks cover the specialized prerequisite, typed intent reset and
+bounded resurrection approach policy. Native movement/casting remains a bundled
+client acceptance item, not established by these policy tests.
+
+## Engine-owned healing-reach intent — 2026-10-03
+
+Rechecked upstream master at `037c01418b5d01506917a3db9b44fd56ac5f965c`.
+`HealPriestStrategy::InitTriggers` registers `party member to heal out of spell
+range` -> `reach party member to heal` at ACTION_CRITICAL_HEAL + 10.
+`ReachPartyMemberToHealAction` consumes GetRange("heal"). This is a trigger,
+not a blanket healing-spell prerequisite. `ResurrectPartyMemberAction` has a
+separate reach prerequisite; resurrection approach remains unported here.
+
+The Cata Priest context now registers those healing trigger/action names and
+priority, plus qualified range values. A successful action submits same-update,
+map-owned intent; the session re-resolves the friendly target and owns native
+MovePoint submission/cancellation. No Player pointer is retained or passed to
+another thread. New approaches no longer begin ahead of the decision engine.
+Existing active approaches retain their bounded lifecycle until arrival,
+cancellation or a three-second yield. The yield disables new reach intent for
+that decision tick. Intent is disabled/reset at the start of each map update.
+
+Existing living-party, controller/follow, engine flag, cast, transfer, rest,
+loot, LOS and companion-leash checks remain. Mounted/flight/native movement
+control states also prohibit approaches. In-range injured members retain
+precedence. The shared heal range defaults to 30 yards; bounded context overrides
+can reduce the positioning distance without overriding native cast eligibility.
+The 40-yard discovery and 20-yard controller envelope remain Cata adaptations.
+This is not full donor ReachCombatTo pathing, spell-range selection, ghost travel,
+or generalized friendly movement ownership.
+
+Windows worldserver compiled and all 215 registered checks passed. Linux
+worldserver compiled; 215 cases ran with 214 passing and one existing expected
+failure, with no unexpected failures. New checks cover donor names/priority, same-update intent
+disable/consumption and qualified healing-reach bounds. Client acceptance remains
+part of the next bundled party replay; no live fix of the Warrior episode is claimed.
+
+## Qualified range-value seam and prerequisite audit — 2026-10-03
+
+Audited upstream `RangeValues.{h,cpp}`, `PlayerbotAI::GetRange`,
+`ReachSpellAction` and `GenericSpellActions.h` at
+`037c01418b5d01506917a3db9b44fd56ac5f965c`. Donor RangeValue is a qualified
+manual float defaulting to zero; GetRange falls back to configured distances.
+ReachSpellAction consumes GetRange("spell"). Generic CastSpellAction currently
+returns an empty prerequisite list; specialized resurrection/healing paths
+have their own reach responsibilities. A blanket spell-prerequisite port would
+therefore misrepresent this source and was not introduced.
+
+The shared Cata movement layer now registers donor-named qualified `range`
+values. Native chase admission and engine range discovery/submission consume
+the same context value through a bounded GetRange adapter. Spell default remains
+20 yards; the future heal qualifier defaults to 30 but is not wired into Priest
+healing movement in this slice. Zero means default. Cata consumption rejects
+negative/nonfinite overrides and clamps positive spell/heal values to the current
+companion envelope (2–25 and 2–30 yards respectively). Unknown qualifiers resolve
+to zero rather than creating an unbounded context entry. These caps preserve
+existing authority; they are Cata adaptations, not copied donor validation.
+
+No player/addon range command or persisted Save/Load parser is exposed. Qualified
+values are map-owned context state and reset to zero; no DB/config schema or
+thread ownership changes. This is not automatic per-spell maximum-range selection
+or full donor range/command/persistence parity. Learned spell and native cast
+validation remain authoritative. Subsequent prerequisites should follow actual
+specialized donor actions instead of adding generic work to every cast.
+
+Windows worldserver compiled and all 212 registered checks passed. Linux
+worldserver compiled; 212 cases ran with 211 passing and one existing expected
+failure, with no unexpected failures. Tests cover independent qualified state/reset,
+default fallback, supported qualifiers, finite bounds and negative/NaN/infinite
+values. No separate client session is required merely to validate this seam.
+
+## Caster movement and attack-entry facing — 2026-10-03
+
+Rechecked donor `CombatStrategy::InitTriggers`, `ReachTargetAction::isUseful`,
+`SetFacingTargetAction` and `AttackAction::Attack` at upstream master
+`037c01418b5d01506917a3db9b44fd56ac5f965c`. The Mage combat context now consumes
+the shared movement seam: donor `not facing target` / `set facing` and
+`enemy out of spell` / `reach spell` trigger/action names and priorities.
+Generic/Fire/Arcane and the independently registered Frost strategy all receive
+the caster triggers. Warrior melee/behind behavior remains on its existing profile; caster strategies
+do not receive behind-target triggers. Native chase is preserved when active.
+
+Caster reach uses the existing Cata companion 20-yard chase envelope, now named
+once in the shared movement layer. This is not donor-configured spell distance
+or dynamically resolved learned-spell range. Native spell validation remains
+authoritative, and admission/leash boundaries are unchanged. Priest support
+movement is not redirected to hostile chase: it retains its separate healing
+reach/follow ownership. The existing optional Mage/Warrior engine flags gate
+their movement actions independently.
+
+A shared non-forced facing operation also runs at the existing validated native
+attack-entry seam, matching donor AttackAction's face-before-attack/chase
+responsibility. It cannot bypass control, casting, transfer or native unfinished
+spline restrictions; inability to turn does not fabricate attack/cast success.
+Engine-enabled Mage periodic facing now belongs to the named engine action,
+while its old direct fallback remains when that engine route is disabled.
+
+Final Windows worldserver compiled and all 210 registered checks passed. Final
+Linux worldserver compiled; 210 cases ran with 209 passing and one existing
+expected failure, with no unexpected failures. New regressions cover caster registry/priority,
+range/facing and active-chase gates. They do not prove native turning, path arrival
+or resolution of the observed Warrior stall. Spell-action prerequisites,
+dynamic spell reach, flee/movement priorities and active-chase failure recovery
+remain bounded donor dependencies, not reasons for a separate test this slice.
+
+## Engine combat movement, first donor batch — 2026-10-03
+
+Refreshed upstream master to the unchanged
+`037c01418b5d01506917a3db9b44fd56ac5f965c`. Adapted registry names, trigger
+priorities and responsibilities from `CombatStrategy::InitTriggers`,
+`MeleeCombatStrategy::InitTriggers`, `SetBehindCombatStrategy::InitTriggers`,
+`SetFacingTargetAction`, `SetBehindTargetAction` and `ReachTargetAction`.
+
+`PlayerbotCombatMovement` registers reusable named `set facing`, `reach melee`
+and `set behind` engine actions with their donor trigger names. The first
+consumer is the existing optional Warrior combat context, shared by Arms,
+Fury and Protection. There is no replacement class rotation or session-only
+facing special case. Actions resolve the current Creature/controller afresh
+and require the native attack victim to match; they never acquire or attack
+a new enemy. Existing owner/target leash, map, living, PvE and optional-route
+boundaries remain, alongside casting/control/transfer/rest/loot guards.
+
+Facing applies only at stationary melee range and uses non-forced native
+SetFacingToObject, which refuses an unfinished spline. Reach submits native
+chase only when out of melee and no native chase is already active. Behind
+positioning applies to stationary melee DPS with a stationary enemy, not a
+Protection spec or a bot holding the enemy's aggro. It reuses Cata's angle-aware
+native chase rather than transplanting WotLK collision/flee-history services.
+Native pathing and cast checks remain authoritative; submission is not arrival.
+
+This is an initial strategy/action seam, not full donor reach/positioning parity.
+Reach does not recover a stalled active chase; behind positioning is a native
+chase adaptation, not the donor's two-candidate collision/flee algorithm.
+Caster range, generic spell prerequisites, attack-time facing and broader
+movement priorities remain later donor work. Existing session chase setup and
+role switching are preserved. The observed Testtwo stall remains unconfirmed
+until a later integrated check; this port is not proof that it is fixed.
+
+Windows worldserver compiled and all 208 registered checks passed. Linux
+worldserver compiled; 208 cases ran with 207 passing and one existing expected
+failure, with no unexpected failures. Three regression cases cover donor trigger
+names/priorities and movement selection gates, not native pathing or command
+cleanup. No new realm/client session is required solely for this source batch.
+
+## Human-led Ragefire checkpoint and deferred movement gap — 2026-10-02
+
+Windows replay `build/playerbot-smoke-20261002-232706` transferred all four
+level-20 role bots into native Ragefire map 389, instance 1 after the human
+established the party bind. Repeated Molten Elemental/Earthborer/Trogg/Shaman
+pulls and Oggleflint engagement recorded 83 Mage offensive casts, 51 Priest
+healing casts, Protection abilities and tank rescue switches. The human reported
+generally functional behavior, then observed Warriors facing away and Testtwo
+standing idle during the boss encounter. Testtwo had previously logged Mortal
+Strike/Rend/Heroic Strike on Oggleflint; this was not simply missing acquisition.
+No dungeon clear, boss kill, individual item awards or complete state/recovery
+qualification is claimed. Native bot save/logout and all test-service shutdown
+completed cleanly after the human logged out.
+
+Source review found an omitted donor responsibility: `AttackAction::Attack`
+and `SetFacingTargetAction` in `MovementActions.cpp` at upstream master
+`037c01418b5d01506917a3db9b44fd56ac5f965c` explicitly face the target.
+Our Warrior action eligibility requires a forward arc, but its adapter relies
+on native ChaseMovementGenerator; that generator faces when launching a spline,
+not explicitly in its already-positioned stop branch. This supports porting
+donor facing/positioning as the next shared combat-movement batch. It does not
+prove the screenshot's distance/path state or guarantee that the whole idle
+episode will resolve from facing alone. A standalone stationary-facing patch
+was drafted, then withdrawn in favor of that donor batch; no live fix is claimed.
+
+Project issue policy: record symptoms, source evidence, intended donor owner
+and remaining uncertainty. Defer nonblocking gameplay gaps to their owning
+feature port rather than adding isolated adapter fixes. Address earlier only
+when safety, data correctness, crashes or a genuine development/test blocker
+requires it. A planned donor feature is not evidence that a defect is fixed.
+
+## Bundled outdoor checkpoint — 2026-10-02
+
+Disposable Windows replay `build/playerbot-smoke-20261002-231751` used the
+current level-20 Protection/Arms/Frost/Holy party. All four joined Test and
+completed native same-map summon acknowledgments. All four engaged Luzran,
+then returned to noncombat after target death. Logs recorded Protection Shield
+Slam, Arms damage, Mage Frostbolt/Fireball, and Priest Renew/Heal on Testone.
+An earlier encounter logged Testone switching to rescue Botmage's aggro.
+
+Testone opened Luzran's corpse through native loot permissions; the human
+reported automatic looting. Individual item awards/persistence were not
+independently verified. Initial explicit Luzran attacks were rejected outside
+the 25-yard admission range; later closer engagement succeeded. No assertion or
+crash appeared in the checked fight logs. All bots saved/logged out and the
+world/auth/database processes stopped cleanly when the human logged out.
+
+This confirms a useful integrated outdoor operation, not every policy added
+since the shared-state candidate. Concurrent resurrection, rest interruption,
+healing reach, stop/resume and defense without leader engagement were not
+independently isolated. The follow-on dungeon run remains pending. The outdoor
+harness mode cannot dispatch its console-only dungeon commands after launch;
+replay without `-RecoveryLoot` uses the existing automatic native bind/transfer
+sequence. In-game development commands remain console-only; no permission
+loosening or live database repair was used to work around that restriction.
+
+## Party-aware noncombat recovery guard — 2026-10-02
+
+Compared donor `NonCombatActions.cpp`, `DrinkAction::isPossible`,
+`LootNonCombatStrategy.cpp`, `InitTriggers`, and `PlayerbotAI.cpp`,
+`DoNextAction`, at upstream master
+`037c01418b5d01506917a3db9b44fd56ac5f965c`. Donor recovery/loot use the
+noncombat flow and native bot combat checks. A group-wide exclusion is not an
+exact donor port: this slice is a conservative Cata adapter guard needed to
+keep recovery consistent with the recently expanded attached-party defense.
+
+Rest start/continuation and corpse-loot discovery, pursuit and final native
+world-session processing now reject nearby attached-party combat. The shared
+helper keeps bot/leader combat as immediate blockers, then checks living,
+in-world, nontransferring members of the bot/leader's shared native group,
+on the same map and within 35 yards of the leader. Unrelated groups and remote
+members do not block recovery. Member eligibility is shared with the existing
+party-engagement target gate; the recovery check itself does not select enemies,
+enter combat state or authorize attacks. Any eligible member combat blocks
+noncombat work, regardless of whether a target is eligible for our PvE attacks.
+
+Rest also explicitly rejects owner transfer/out-of-world/different-map state.
+Existing rest aura cancellation, owned loot-movement cleanup, mailbox completion
+and native loot permission checks remain. No new cross-thread Player/Group cache
+is introduced: the guard runs in the existing map update or native thread-unsafe
+world-session loot context, not a new worker. Default flags and DB authority
+are unchanged.
+
+Windows worldserver compiled and all 205 registered checks passed. Linux
+worldserver compiled; 205 cases ran with 204 passing and one existing expected
+failure, with no unexpected failures. The regression composes the shared admission
+policy with rest eligibility; it does not instantiate native groups or prove
+live aura/path/mailbox cancellation. Qualify interruption and recovery after
+party combat in the existing bundled fixture, not a separate playtest.
+
+## Incoming resurrection coordination — 2026-10-02
+
+Refreshed upstream master; it remains
+`037c01418b5d01506917a3db9b44fd56ac5f965c`. Adapted
+`src/Ai/Base/Value/PartyMemberToResurrect.cpp`, `FindDeadPlayer` and
+`IsTargetOfResurrectSpell`, and `PartyMemberValue.cpp`, `IsTargetOfSpellCast`.
+The donor rejects a corpse already receiving a resurrection cast, in addition
+to its existing completed-request check.
+
+The Cata Priest now skips such a corpse and can select the next eligible group
+member. A shared native cast-inspection helper serves direct healing and
+resurrection, without caching Player/Corpse/Spell pointers or predicting cast
+completion. Other living, in-world, same-map group members' unfinished native
+casts qualify only when the explicit unit target or nonempty corpse target
+matches and the spell has a donor-recognized resurrection effect. Direct heals
+retain unit-target matching and their existing effect/health policy. Interrupted
+or completed casts cease to reserve the corpse on the next inspection.
+
+Resurrection discovery also rejects bot/member transfers, out-of-world members
+and nonfriendly targets. Existing corpse-only, request, 30-yard, line-of-sight,
+native cast, learned-spell and optional-engine gates remain. This is not ghost
+travel, automatic resurrection acceptance, role-priority resurrection ordering,
+or full donor dead-state parity. Recovery still uses native Cata authority.
+
+Windows worldserver compiled and all 204 registered checks passed. Linux
+worldserver compiled; 204 cases ran with 203 passing and one existing expected
+failure, with no unexpected failures. The policy regression covers corpse eligibility,
+pending requests and incoming casts; it does not simulate native spell/corpse
+targets or prove live resurrection. Include concurrent resurrection, interrupted
+cast release and fallback to another corpse in later bundled recovery testing
+when those situations arise; no forced wipe is required for this source slice.
+
+## Attached-party combat engagement — 2026-10-02
+
+Audited upstream `src/Ai/Base/Value/AttackersValue.cpp`, `Calculate` and
+`AddAttackersOf`, at master `037c01418b5d01506917a3db9b44fd56ac5f965c`.
+The donor gathers attackers from the group, with native combat/threat and
+anti-killsteal checks. The existing Cata attacker-value port gathered group
+attackers, but downstream leader-only engagement gates prevented their use.
+
+Target selection, session auto-assist admission/continuation, tank rescue and
+Priest damage admission now share an attached-party engagement helper. It keeps
+the living, nearby same-map leader requirement. A second member must be living,
+in world, not transferring, on the same map, in the bot/leader's shared native
+group, within 35 yards of the leader, and already in combat with the creature.
+Leader engagement also remains valid for an ungrouped attached companion.
+Attacker discovery explicitly adds the controller's native combat references;
+existing native threat/victim discovery and candidate validation remain intact.
+
+This is a bounded Cata adaptation, not a copy of the donor's full attacker
+validation or an autonomous pull strategy. PvE, detection/LOS, target range,
+crowd-control exclusions, explicit command precedence and native attack checks
+remain. No retained Unit pointer, new session admission authority or database
+operation is introduced. Historical owner-only descriptions below describe the
+earlier slices and are superseded by this scope change.
+
+Windows worldserver compiled and all 203 registered checks passed. Linux
+worldserver compiled; 203 cases ran with 202 passing and one existing expected
+failure, with no unexpected failures. Six policy assertions cover owner-only,
+attached-party, unrelated-group, ineligible-member and unengaged-target cases;
+they do not prove native combat relationships or integrated tank/healer effects.
+Include party-member engagement without leader engagement in the deferred
+bundled fixture check, rather than scheduling a separate playtest.
+
+## Native near-teleport acknowledgment — 2026-10-02
+
+Source audit of the failed placement followed native `.summon` through
+`ChatHandler::extractPlayerTarget`, `ObjectAccessor::FindPlayerByName`,
+`Player::TeleportTo` and `WorldSession::HandleMoveTeleportAck`. Logged summon
+commands and continued old-position walking fit an uncompleted near teleport;
+name lookup is not proven defective. Native same-map relocation waits for a
+client acknowledgment, which a socketless bot cannot send. The existing module
+bridge handled only the explicitly requested dungeon worldport path.
+
+Adapted donor `src/Bot/PlayerbotAI.cpp`, `HandleTeleportAck`, at upstream master
+`037c01418b5d01506917a3db9b44fd56ac5f965c`. Map updates now acknowledge an
+in-world, fully prepared near teleport through typed Cata native handlers.
+Native allowed-mover checks are retained; a missing active mover is established
+through native SetActiveMover only when self is already an allowed mover, and
+an existing non-self mover is never seized. The existing delayed-teleport getter
+is now public read-only so the adapter cannot acknowledge before preparation.
+No native permission check, world/map ownership or position mutation is bypassed.
+
+After native completion the adapter clears stale queued/reach/path work and
+refreshes formation; a compare-exchange cease request preserves any already
+queued explicit command. Far/dungeon transfer remains on its existing world
+thread path. Human session behavior is unchanged. Cleanup also waits if delayed
+operations chain another transfer or remove the player from the world.
+Final Windows worldserver and all 202 registered checks passed; final Linux
+worldserver and 202 cases passed with one existing expected failure (201 passing,
+no unexpected failures). Script syntax and diff checks passed. Native headless
+near-teleport completion and later client summon placement are separate checks.
+
+The existing disposable fixture runner has an opt-in `-CheckNearTeleport` mode,
+restricted to `-CheckRosterOnly -RoleFixture`. It validates native same-map
+destinations, discovers the unambiguous native Silvermoon-region teleport name,
+requests online teleports there and back to Tranquillien,
+requires fresh per-bot completion markers for both legs, then checks offline
+saved landing coordinates through read-only queries after native logout. No
+direct position edits or client commands are used to claim completion. It
+retains normal role/equipment/consumable verification and automatic shutdown.
+
+Headless replay `build/playerbot-smoke-20261002-192342` passed. The copied native
+DB resolved `SilvermoonCity`; all four online bots logged a fresh acknowledgment
+for that destination and for the return to Tranquillien (eight completions).
+After native logout, read-only queries verified each saved return landing within
+one unit of native coordinates, alongside roles/talents/equipment/consumables.
+World/auth/database shut down cleanly and test listeners closed. The initial
+`192109` run exited cleanly before teleport because the guessed `Silvermoon`
+name was absent; destination discovery corrected the fixture, not server code.
+This verifies native same-map completion and persistence on Windows, not a
+client `.summon` session, automatic follow after summoning, Linux runtime or
+integrated combat acceptance.
+
+## Coordination review and dungeon handoff — 2026-10-02
+
+Review found a stale reach-owner condition: a completed/stalled snapshot path
+with an unchanged candidate GUID could keep returning before healing decisions
+indefinitely. The adapter now yields when native point movement ends or after
+three seconds, clears its owned movement, and allows one engine decision tick.
+A later healing cadence may select a fresh snapshot destination. This bounded
+yield is a native-adapter correction, not a donor pathfinding algorithm. It does
+not claim successful obstacle traversal, continuous tracking or cast effects.
+Regression coverage checks the timeout boundary and completed-motion case.
+
+Windows worldserver compiled and all 202 registered checks passed. Linux
+worldserver compiled; 202 cases ran with 201 passing and one existing expected
+failure, with no unexpected failures. This closes the source review/build pass,
+not the deferred client acceptance or human-led dungeon milestone.
+
+## Bounded healing reach — 2026-10-02
+
+Upstream master remains `037c01418b5d01506917a3db9b44fd56ac5f965c`.
+Adapted the purpose and stay/casting guards of
+`src/Ai/Base/Actions/ReachTargetActions.cpp`, `ReachPartyMemberToHealAction`
+and `ReachTargetAction::isUseful`, with the far-range health penalty from
+`PartyMemberToHeal::Calculate`. This is a conservative native session movement
+adapter, not the donor's complete reach-action/prerequisite system.
+
+A followed Priest with engine healing enabled may close a 30–40-yard gap to
+a living same-map party member below 80 percent health, only while that member
+is within 20 yards of the human leader and the bot remains within its 35-yard
+owner leash. Learned basic healing, native friendliness/detection/line of sight
+and incoming-heal policy are required. An injured eligible member already in
+healing range takes precedence. The adapter uses native MovePoint/pathfinding
+with a snapshot destination and stores only the target GUID for movement
+ownership. It rechecks eligibility at the 750-ms healing cadence and stops upon
+entering native healing range; it does not retain a target pointer or chase
+hostile units.
+
+Stay/stop/follow replacement, death and requested transfer clear owned reach
+movement. Casting, rest/loot, owner/target loss and leash/party changes reject
+or cancel reach. Passive engine ticks and ordinary formation catch-up do not
+compete while reach owns active movement. Native casts, spell ranges and map
+movement remain authoritative. A moving target, path failure, obstruction,
+command cleanup and transfer still need integrated qualification; the snapshot
+path is not full donor obstacle traversal or continuously tracking follow.
+
+Windows worldserver compiled and all 201 registered checks passed. Linux
+worldserver compiled; 201 cases ran with 200 passing and one existing expected
+failure, with no unexpected failures. Reach policy tests cover injury, gap and
+leader-distance boundaries and invalid distance. Command/transfer cleanup and
+live pathing remain integrated runtime checks, not proven by these unit tests.
+
+## Incoming healing coordination — 2026-10-02
+
+Rechecked upstream master `037c01418b5d01506917a3db9b44fd56ac5f965c`:
+`src/Ai/Base/Value/PartyMemberValue.cpp`, `IsTargetOfSpellCast`, and
+`src/Ai/Base/Value/PartyMemberToHeal.cpp`, `Calculate`.
+
+Direct and engine Priest healing now inspect other same-map living group
+members' native current spells. An unfinished direct-heal cast explicitly
+targeting the candidate defers routine healing, but emergency health below
+55 percent and raid healing can overlap. The 55-percent boundary uses this
+adapter's existing critical threshold, rather than pretending to import the
+donor's configurable medium-health value. Instant casts, already-applied HoTs,
+damage spells and casts at another target are not reservations. No pointer,
+reservation timer or predicted heal amount survives the map-thread inspection.
+Cast rejection fallback and native spell authority remain unchanged.
+
+Also audited `src/Ai/Base/Actions/ReachTargetActions.cpp`:
+`ReachTargetAction::isUseful` respects stay/channeling and heal reach uses a
+separate action. That action is not yet ported. Current candidates stop at
+30 yards; expanding discovery/reach needs owner-leash, transfer, cast and
+movement cleanup integration, not an unrestricted follow/chase shortcut.
+No new combat healing movement is claimed in this slice.
+
+Windows worldserver compiled and all 200 registered checks passed after fixing
+the native read-only group iterator type. New policy coverage checks the
+55-percent boundary, emergency override, raid override and no-incoming-cast
+case. These checks do not simulate concurrent native spell casts; integrated
+client acceptance remains deferred.
+Linux worldserver also compiled; 200 cases ran with 199 passing and one
+existing expected failure, with no unexpected failures.
+
+## Healing selection and caster formation — 2026-10-02
+
+Audited upstream master `037c01418b5d01506917a3db9b44fd56ac5f965c`:
+`src/Ai/Base/Value/PartyMemberToHeal.cpp`, `PartyMemberToHeal::Calculate`,
+and `src/Ai/Base/Value/Formations.cpp`, `CircleFormation::GetLocation`.
+Master was rechecked and unchanged for this slice.
+
+Priest direct and engine healing now share the donor's health-plus-distance
+probe (`health percentage + distance / 10`) for native eligible candidates.
+Existing 30-yard/line-of-sight eligibility is retained, so the donor's far-range
+penalty is unnecessary here. Stable ties, invalid-value filtering and fallback
+after native cast rejection remain. Cures still use their own full-health-safe
+ordering; spell thresholds and native cast authority are unchanged. The donor's
+duplicate-heal cast inspection, focus-heal strategy and pet support are not
+ported by this slice.
+
+Mage/Priest follow positions now retain their roster angles but use a six-yard
+radius. The role-dependent wider radius follows the donor formation concept;
+six yards is a conservative companion-adapter choice, not the donor's configured
+flee range or full CircleFormation implementation. Role spacing is included in
+the formation signature so a change refreshes native follow movement. No new
+combat repositioning, retreat, collision solver or healing-cast movement is
+introduced. Integrated party acceptance remains pending.
+
+Windows worldserver compiled and all 199 registered checks passed. Linux
+worldserver compiled and ran 199 cases: 198 passed and one existing expected
+failure, with no unexpected failures. New checks cover distance-weighted
+selection, stable ties/cast fallback, invalid distances and caster formation
+angles/signature preservation. They do not qualify live pathing or heal effects.
+
+## Tank rescue integration — 2026-10-02
+
+Rechecked upstream master `037c01418b5d01506917a3db9b44fd56ac5f965c`,
+`src/Ai/Base/Value/TankTargetValue.cpp`: `FindTankTargetSmartStrategy` ranks
+lost aggro before melee proximity and own threat; `TankTargetValue::Calculate`
+recognizes a marked enemy attacking a non-tank player. The existing Cata
+target-value adaptation retains its original import attribution.
+
+The new map-thread session integration uses that existing ranking at auto-assist
+acquisition and once per action cadence during engagement. Ongoing switches
+are restricted to rescuing a same-party player from an already owner-engaged
+enemy. They cancel old queued actions through the existing attack transition.
+Explicit attack commands are not overridden; another recognized Protection
+Warrior's target is not stolen. This conservative adapter is not full donor
+multi-tank/role parity or autonomous pull logic. Healing and positioning remain
+the next coordination dependencies; bundled client acceptance is pending.
+
+Also inspected `src/Ai/Base/Value/PartyMemberToHeal.cpp` at the same revision:
+its health/distance probe and duplicate-heal checks, not a blanket tank-first
+rule, are the basis for the next healing slice. No new healing behavior is
+claimed here. Windows worldserver compiled and all 196 registered automated
+checks passed, including six tank-rescue policy guards. These policy tests do
+not simulate native threat, movement or an integrated dungeon encounter.
+Linux worldserver also compiled; its suite ran 196 cases with 195 passing
+and one existing expected failure, with no unexpected failures.
+
 ## Shared decision states — 2026-10-02
 
 Audited upstream master at `037c01418b5d01506917a3db9b44fd56ac5f965c`:

@@ -18,11 +18,14 @@ public:
         if (!context) return 1.0f;
         Value<bool>* neglect = context->GetValue<bool>("neglect threat");
         if (neglect && neglect->Get()) return 1.0f; // donor one-shot, consumed even for support
-        if (!action || action->getThreatType() != Action::ActionThreatType::Single) return 1.0f;
+        if (!action || action->getThreatType() == Action::ActionThreatType::None) return 1.0f;
         Player* bot = botAI->GetBot();
         if (!bot || !bot->GetGroup()) return 1.0f;
         Value<uint8>* threat = context->GetValue<uint8>("threat", "current target");
-        return PlayerbotThreat::DamageMultiplier(action->getThreatType(), true, threat ? threat->Get() : 0);
+        Value<uint8>* aoe = action->getThreatType() == Action::ActionThreatType::Aoe ?
+            context->GetValue<uint8>("threat", "aoe") : nullptr;
+        return PlayerbotThreat::DamageMultiplier(action->getThreatType(), true, threat ? threat->Get() : 0,
+            false, aoe ? aoe->Get() : 0);
     }
 };
 class ThreatStrategy final : public Strategy
@@ -40,5 +43,6 @@ void PlayerbotThreat::AddContexts(SharedNamedObjectContextList<Strategy>& strate
 {
     auto* factory = new NamedObjectContext<Strategy>();
     factory->creators["threat"] = [](PlayerbotAI* ai) { return new ThreatStrategy(ai); };
+    factory->creators["focus"] = [](PlayerbotAI* ai) { return new PlayerbotThreat::FocusStrategy(ai); };
     strategies.Add(factory);
 }

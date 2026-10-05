@@ -3,6 +3,7 @@
  * Released under GNU GPL v2 or any later version.
  */
 #include "../src/Ai/Base/PlayerbotRestStrategy.h"
+#include "../src/Ai/Base/PlayerbotTargetSelection.h"
 #include <catch2/catch.hpp>
 #include <memory>
 
@@ -47,4 +48,18 @@ TEST_CASE("Playerbot rest eligibility rejects disable combat death transfer and 
     REQUIRE_FALSE(CanRest(true, true, false, true, false, false));
     REQUIRE_FALSE(CanRest(true, true, false, false, true, false));
     REQUIRE_FALSE(CanRest(true, true, false, false, false, true));
+}
+
+TEST_CASE("Playerbot rest waits for eligible attached party combat without blocking unrelated members", "[PlayerbotRest]")
+{
+    using PlayerbotTargetSelection::CombatScopeAllows;
+    auto canRest = [](bool partyCombat)
+    {
+        return PlayerbotRest::CanRest(true, true, false, false, false, partyCombat);
+    };
+    REQUIRE_FALSE(canRest(CombatScopeAllows(true, false, false, false)));
+    REQUIRE_FALSE(canRest(CombatScopeAllows(false, true, true, true)));
+    REQUIRE(canRest(CombatScopeAllows(false, false, true, true)));
+    REQUIRE(canRest(CombatScopeAllows(false, true, false, true)));
+    REQUIRE(canRest(CombatScopeAllows(false, true, true, false)));
 }

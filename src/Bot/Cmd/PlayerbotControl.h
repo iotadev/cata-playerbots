@@ -6,6 +6,8 @@
 #define CATA_PLAYERBOTS_PLAYERBOT_CONTROL_H
 
 #include "ObjectGuid.h"
+#include "PlayerbotStrategyBinding.h"
+#include <string>
 
 class Player;
 
@@ -13,8 +15,10 @@ enum class PlayerbotControlCommand
 {
     Follow,
     Hold,
+    Stay,
     Attack,
-    Cease
+    Cease,
+    Rebuff
 };
 
 enum class PlayerbotControlResult
@@ -22,7 +26,9 @@ enum class PlayerbotControlResult
     Queued,
     BotUnavailable,
     Unauthorized,
-    NotFollowing
+    NotFollowing,
+    Busy,
+    InvalidCommand
 };
 
 // World-thread entry point shared by future chat and addon transports. The
@@ -31,6 +37,10 @@ class PlayerbotControl
 {
 public:
     static PlayerbotControlResult Dispatch(Player& requester, ObjectGuid botGuid, PlayerbotControlCommand command);
+    static PlayerbotControlResult DispatchRange(Player& requester, ObjectGuid botGuid, std::string const& param);
+    static PlayerbotControlResult DispatchStrategy(Player& requester, ObjectGuid botGuid, std::string const& command,
+        std::string const& token = {}, std::string const& target = {}, uint64 batch = 0,
+        PlayerbotStrategyBinding const& binding = {});
 };
 
 #endif

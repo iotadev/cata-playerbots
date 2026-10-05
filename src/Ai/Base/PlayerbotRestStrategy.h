@@ -21,9 +21,9 @@ inline bool Needs(Kind kind, float health, float mana, bool usesMana)
 {
     return kind == Kind::Food ? health > 0.0f && health < LowHealth : usesMana && mana < LowMana;
 }
-inline bool CanRest(bool enabled, bool alive, bool combat, bool transferring, bool mounted, bool controllerCombat)
+inline bool CanRest(bool enabled, bool alive, bool combat, bool transferring, bool mounted, bool partyCombat)
 {
-    return enabled && alive && !combat && !transferring && !mounted && !controllerCombat;
+    return enabled && alive && !combat && !transferring && !mounted && !partyCombat;
 }
 class FoodStrategy final : public Strategy
 {

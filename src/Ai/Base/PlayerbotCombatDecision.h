@@ -16,6 +16,8 @@
 class Creature;
 class Player;
 class Unit;
+class ObjectGuid;
+class ForceRebuffState;
 
 // The ordered trigger/action pattern is adapted from mod-playerbots. Cata's
 // own SpellInfo and Spell machinery remain the authority for every cast.
@@ -63,8 +65,9 @@ inline bool NeedsPartyBuff(bool learned, bool singleAuraPresent, bool partyAuraP
     return learned && !singleAuraPresent && !partyAuraPresent;
 }
 
-bool MaintainPartyBuff(Player& bot, Player& owner, PartyBuff const& buff);
+bool MaintainPartyBuff(Player& bot, Player& owner, PartyBuff const& buff, ForceRebuffState const* rebuff = nullptr);
 bool PartyBuffNeeded(Player& bot, Player& owner, PartyBuff const& buff);
+ObjectGuid PartyBuffTarget(Player& bot, Player& owner, PartyBuff const& buff, ForceRebuffState const* rebuff = nullptr);
 }
 
 #endif

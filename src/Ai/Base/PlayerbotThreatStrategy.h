@@ -5,11 +5,39 @@
 #define PLAYERBOT_THREAT_STRATEGY_H
 #include "../../Bot/Engine/Strategy/Strategy.h"
 #include "../../Bot/Engine/Value/Value.h"
+#include "../../Bot/Engine/Multiplier.h"
 #include <algorithm>
 #include <cmath>
 
 namespace PlayerbotThreat
 {
+inline Action::ActionThreatType ClassifySpellTarget(bool selfTarget, bool positive)
+{
+    return !selfTarget ? Action::ActionThreatType::Single :
+        positive ? Action::ActionThreatType::None : Action::ActionThreatType::Aoe;
+}
+inline float FocusMultiplierValue(Action::ActionThreatType type, bool healing, bool attackerDebuff)
+{
+    return attackerDebuff || (type == Action::ActionThreatType::Aoe && !healing) ? 0.0f : 1.0f;
+}
+class FocusMultiplier final : public Multiplier
+{
+public:
+    explicit FocusMultiplier(PlayerbotAI* ai) : Multiplier(ai, "focus") { }
+    float GetValue(Action* action) override
+    {
+        return action ? FocusMultiplierValue(action->getThreatType(), action->isHealingAction(),
+            action->isDebuffOnAttacker()) : 1.0f;
+    }
+};
+class FocusStrategy final : public Strategy
+{
+public:
+    explicit FocusStrategy(PlayerbotAI* ai) : Strategy(ai) { }
+    std::string const getName() override { return "focus"; }
+    void InitMultipliers(std::vector<Multiplier*>& multipliers) override
+    { multipliers.push_back(new FocusMultiplier(botAI)); }
+};
 inline uint8_t Percent(float botThreat, float tankThreat, bool hasTank, bool inCombat, bool fleeing)
 {
     if (!hasTank || fleeing) return 0;
@@ -19,10 +47,20 @@ inline uint8_t Percent(float botThreat, float tankThreat, bool hasTank, bool inC
     // Saturate rather than wrapping uint8, and never divide by a zero tank amount.
     return uint8_t(std::clamp(botThreat * 100.0f / tankThreat, 0.0f, 255.0f));
 }
-inline float DamageMultiplier(Action::ActionThreatType type, bool grouped, uint8_t percent, bool neglect = false)
+inline float DamageMultiplier(Action::ActionThreatType type, bool grouped, uint8_t percent, bool neglect = false,
+    uint8_t aoePercent = 0)
 {
-    // The donor's AoE 50% path awaits the complete attacker-value port.
-    return !neglect && grouped && type == Action::ActionThreatType::Single && percent >= 80 ? 0.0f : 1.0f;
+    // Donor AoE actions must pass both the attacker maximum and current-target guard.
+    if (neglect || !grouped || type == Action::ActionThreatType::None) return 1.0f;
+    return percent >= 80 || (type == Action::ActionThreatType::Aoe && aoePercent >= 50) ? 0.0f : 1.0f;
+}
+template <class Range, class Resolve>
+uint8_t MaximumPercent(Range const& attackers, Resolve resolve)
+{
+    uint8_t maximum = 0;
+    for (auto const& attacker : attackers)
+        maximum = std::max(maximum, resolve(attacker));
+    return maximum;
 }
 class NeglectThreatResetValue final : public ManualSetValue<bool>
 {

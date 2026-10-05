@@ -2,6 +2,7 @@
  * 7bae1b5c58c76a0aa20381155edc08096d1485b2. See PORTING.md.
  * Released under GNU GPL v2 or any later version. */
 #include "PlayerbotTargetSelection.h"
+#include "PlayerbotRoles.h"
 #include "../../Bot/Engine/Engine.h"
 #include "../../Bot/PlayerbotAI.h"
 #include "Creature.h"
@@ -15,13 +16,11 @@ namespace
 {
 bool ImplementedTank(Player const* player)
 {
-    return player && player->getClass() == CLASS_WARRIOR &&
-        player->GetPrimaryTalentTree(player->GetActiveSpec()) == TALENT_TREE_WARRIOR_PROTECTION;
+    return player && PlayerbotRoles::IsTank(*player);
 }
 bool ImplementedNonTank(Player const* player)
 {
-    return player && (player->getClass() == CLASS_MAGE || player->getClass() == CLASS_PRIEST ||
-        (player->getClass() == CLASS_WARRIOR && !ImplementedTank(player)));
+    return player && !ImplementedTank(player);
 }
 class TargetGuidValue final : public CalculatedValue<ObjectGuid>
 {
@@ -39,6 +38,11 @@ private:
     bool tank;
 };
 }
+bool PlayerbotTargetSelection::IsProtectedTarget(Creature const& target)
+{
+    return !CrowdControlAllows(target.IsPolymorphed(), target.IsCharmed(), target.isFeared(),
+        target.HasUnitState(UNIT_STATE_ISOLATED));
+}
 void PlayerbotTargetSelection::AddContexts(SharedNamedObjectContextList<UntypedValue>& values)
 {
     auto* factory = new NamedObjectContext<UntypedValue>();
@@ -49,6 +53,52 @@ void PlayerbotTargetSelection::AddContexts(SharedNamedObjectContextList<UntypedV
     factory->creators["tank target"] = [](PlayerbotAI* ai) { return new TargetGuidValue(ai, true); };
     values.Add(factory);
 }
+namespace
+{
+bool NearbyPartyMember(Player const& bot, Player const& owner, Player const* member)
+{
+    return member && member->IsInWorld() && member->IsAlive() && !member->IsBeingTeleported() &&
+        member->GetMap() == bot.GetMap() && owner.IsWithinDistInMap(member, 35.0f);
+}
+}
+
+bool PlayerbotTargetSelection::HasNearbyPartyCombat(Player const& bot, Player const& owner)
+{
+    if (bot.IsInCombat() || owner.IsInCombat()) return true;
+    if (!bot.IsInWorld() || !owner.IsInWorld() || bot.GetMap() != owner.GetMap()) return false;
+    Group const* group = bot.GetGroup();
+    bool attached = group && owner.GetGroup() == group && group->IsMember(owner.GetGUID()) && group->IsMember(bot.GetGUID());
+    if (!attached) return false;
+    for (GroupReference const* ref = group->GetFirstMember(); ref; ref = ref->next())
+    {
+        Player* member = ref->GetSource();
+        bool eligible = NearbyPartyMember(bot, owner, member);
+        if (CombatScopeAllows(false, attached, eligible, eligible && member->IsInCombat())) return true;
+    }
+    return false;
+}
+
+bool PlayerbotTargetSelection::IsEngagedWithAttachedParty(Player const& bot, Player const& owner, Creature const& target)
+{
+    if (!bot.IsInWorld() || !owner.IsInWorld() || !bot.IsAlive() || !owner.IsAlive() ||
+        bot.IsBeingTeleported() || owner.IsBeingTeleported() || bot.GetMap() != owner.GetMap() ||
+        target.GetMap() != bot.GetMap() || !target.IsInWorld() || !target.IsAlive() ||
+        target.IsControlledByPlayer() || !bot.IsWithinDistInMap(&owner, 35.0f))
+        return false;
+    if (owner.IsInCombatWith(&target)) return true;
+    Group const* group = bot.GetGroup();
+    bool attached = group && owner.GetGroup() == group && group->IsMember(owner.GetGUID()) && group->IsMember(bot.GetGUID());
+    if (!attached) return false;
+    for (GroupReference const* ref = group->GetFirstMember(); ref; ref = ref->next())
+    {
+        Player* member = ref->GetSource();
+        bool eligible = NearbyPartyMember(bot, owner, member);
+        if (CombatScopeAllows(false, attached, eligible, eligible && member->IsInCombatWith(&target)))
+            return true;
+    }
+    return false;
+}
+
 static ObjectGuid SelectTarget(PlayerbotAI& ai, Engine const& engine, bool tank)
 {
     using namespace PlayerbotTargetSelection;
@@ -57,7 +107,7 @@ static ObjectGuid SelectTarget(PlayerbotAI& ai, Engine const& engine, bool tank)
     AiObjectContext* context = ai.GetAiObjectContext();
     if (!bot || !owner || !context || !bot->IsAlive() || !owner->IsAlive() ||
         bot->IsBeingTeleported() || owner->IsBeingTeleported() || !bot->IsInWorld() || !owner->IsInWorld() ||
-        bot->GetMap() != owner->GetMap() || !owner->IsInCombat() || !bot->IsWithinDistInMap(owner, 35.0f))
+        bot->GetMap() != owner->GetMap() || !bot->IsWithinDistInMap(owner, 35.0f))
         return ObjectGuid::Empty;
     if (tank && !ImplementedTank(bot)) return ObjectGuid::Empty;
     GuidSet excluded = engine.GatherTargetExclusions(tank ? TargetValueExclusionType::Tank : TargetValueExclusionType::Dps);
@@ -71,7 +121,7 @@ static ObjectGuid SelectTarget(PlayerbotAI& ai, Engine const& engine, bool tank)
         if (guid.IsEmpty() || guid == moon || guid == ccGuid || excluded.count(guid)) return nullptr;
         Creature* target = ObjectAccessor::GetCreature(*bot, guid);
         if (!target || !target->IsAlive() || target->IsControlledByPlayer() || target->IsInEvadeMode() ||
-            target->IsPolymorphed() || !owner->IsInCombatWith(target) || !bot->IsValidAttackTarget(target) ||
+            IsProtectedTarget(*target) || !IsEngagedWithAttachedParty(*bot, *owner, *target) || !bot->IsValidAttackTarget(target) ||
             !bot->CanSeeOrDetect(target) || !bot->IsWithinLOSInMap(target) ||
             !bot->IsWithinDistInMap(target, 25.0f) || !owner->IsWithinDistInMap(target, 25.0f) ||
             (target->IsImmunedToDamage(SPELL_SCHOOL_MASK_NORMAL) && target->IsImmunedToDamage(SPELL_SCHOOL_MASK_MAGIC)))
@@ -100,7 +150,7 @@ static ObjectGuid SelectTarget(PlayerbotAI& ai, Engine const& engine, bool tank)
             if (Player* member = ref->GetSource(); member && member != bot && member->IsInWorld() &&
                 member->IsAlive() && member->GetMap() == bot->GetMap() && bot->GetExactDist(member) <= 100.0f)
                 ++nearCount;
-    bool casterRanking = estimated && nearCount > 3 && (bot->getClass() == CLASS_MAGE || bot->getClass() == CLASS_PRIEST);
+    bool casterRanking = estimated && nearCount > 3 && PlayerbotRoles::IsRanged(*bot);
     ObjectGuid skull = group ? group->GetTargetIcon(7) : ObjectGuid::Empty;
     Creature* current = ai.GetCurrentTarget();
     Candidate best{};
@@ -120,7 +170,7 @@ static ObjectGuid SelectTarget(PlayerbotAI& ai, Engine const& engine, bool tank)
             if (result.IsEmpty() || BetterTank(next, tankBest)) { tankBest = next; result = guid; }
             continue;
         }
-        bool ranged = bot->getClass() == CLASS_MAGE || bot->getClass() == CLASS_PRIEST;
+        bool ranged = PlayerbotRoles::IsRanged(*bot);
         Candidate next{distance, estimated ? float(target->GetHealth()) / dps : float(target->GetHealth()),
             ranged ? distance < 30.0f : bot->IsWithinMeleeRange(target), current && current->GetGUID() == guid,
             guid == skull || std::find(priority.begin(), priority.end(), guid) != priority.end()};

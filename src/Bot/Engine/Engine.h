@@ -40,6 +40,12 @@ public:
 class Engine : public PlayerbotAIAware
 {
 public:
+    enum class StrategyChangeStatus { Rejected, Unchanged, Changed };
+    struct StrategyChangeResult
+    {
+        StrategyChangeStatus Status = StrategyChangeStatus::Rejected;
+        bool Query = false;
+    };
     Engine(PlayerbotAI* botAI, AiObjectContext& context, uint32_t expiryMs = 0);
     ~Engine();
     Engine(Engine const&) = delete;
@@ -53,6 +59,11 @@ public:
     bool HasStrategy(std::string const& name) const;
     bool ContainsStrategy(StrategyType type) const;
     std::vector<std::string> GetStrategies() const;
+    // Map-thread-only donor operator layer. The caller supplies a state-specific
+    // mutable allowlist; registration alone does not authorize changing a strategy.
+    // No chat transport, persistence, reset, or session-role override is implied.
+    StrategyChangeResult ChangeStrategies(std::string const& command,
+                                         std::set<std::string> const& mutableStrategies);
     uint32_t GetStrategyTypeMask() const { return strategyTypeMask; }
     bool HasTargetExclusions() const { return hasTargetExclusions; }
     GuidSet GatherTargetExclusions(TargetValueExclusionType type) const;

@@ -2,6 +2,9 @@
  * 7bae1b5c58c76a0aa20381155edc08096d1485b2. See PORTING.md.
  * Released under GNU GPL v2 or any later version. */
 #include "PlayerbotCombatValues.h"
+#include "PlayerbotPartySupport.h"
+#include "PlayerbotRoles.h"
+#include "PlayerbotPartyBuffStrategy.h"
 #include "PlayerbotDpsEstimate.h"
 #include "PlayerbotThreatStrategy.h"
 #include "PlayerbotCombatBalance.h"
@@ -21,8 +24,7 @@ namespace
 {
 bool IsImplementedTank(Player const& player)
 {
-    return player.getClass() == CLASS_WARRIOR &&
-        player.GetPrimaryTalentTree(player.GetActiveSpec()) == TALENT_TREE_WARRIOR_PROTECTION;
+    return PlayerbotRoles::IsTank(player);
 }
 uint32 MixedGearScore(Player& player)
 {
@@ -89,7 +91,7 @@ protected:
                 (member->getClass() != CLASS_WARRIOR && member->getClass() != CLASS_MAGE && member->getClass() != CLASS_PRIEST))
                 return 0.0f;
             dps += PlayerbotDpsEstimate::Contribution(member->getLevel(), MixedGearScore(*member),
-                IsImplementedTank(*member), member->getClass() == CLASS_PRIEST);
+                IsImplementedTank(*member), PlayerbotRoles::IsHealer(*member));
         }
         return dps * PlayerbotDpsEstimate::GroupBonus(members.size());
     }
@@ -154,6 +156,7 @@ protected:
             }
         };
         add(*bot);
+        if (Player* owner = botAI->GetController(); owner && owner != bot) add(*owner);
         if (Group* group = bot->GetGroup())
             for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
                 if (Player* member = ref->GetSource(); member && member != bot) add(*member);
@@ -184,6 +187,23 @@ protected:
         return PlayerbotCombatBalance::Percent(playerLevels, group ? group->GetMembersCount() : 0, enemyLevels);
     }
 };
+class PartyMemberToDispelValue final : public CalculatedValue<ObjectGuid>, public Qualified
+{
+public:
+    explicit PartyMemberToDispelValue(PlayerbotAI* ai) : CalculatedValue(ai, "party member to dispel") { }
+protected:
+    ObjectGuid Calculate() override
+    {
+        Player* bot = botAI ? botAI->GetBot() : nullptr;
+        if (!bot) return ObjectGuid::Empty;
+        auto request = PlayerbotPartySupport::ResolveDispelRequest(bot->getClass(), qualifier);
+        if (!request.Spell || !bot->HasSpell(request.Spell)) return ObjectGuid::Empty;
+        for (Player* member : PlayerbotPartySupport::LivingSupportCandidates(*bot, botAI->GetController()))
+            if (member != bot && PlayerbotPartySupport::HasDispellableAura(*bot, *member, request.Spell, request.Type))
+                return member->GetGUID();
+        return ObjectGuid::Empty;
+    }
+};
 class ThreatValue final : public CalculatedValue<uint8>, public Qualified
 {
 public:
@@ -191,9 +211,29 @@ public:
 protected:
     uint8 Calculate() override
     {
-        if (!botAI || (!qualifier.empty() && qualifier != "current target")) return 0;
+        if (!botAI) return 0;
         Player* bot = botAI->GetBot();
-        Creature* target = botAI->GetCurrentTarget();
+        if (!bot || !bot->IsInWorld() || !bot->IsAlive() || bot->IsBeingTeleported()) return 0;
+        if (qualifier == "aoe")
+        {
+            AiObjectContext* context = botAI->GetAiObjectContext();
+            auto* attackers = context ? context->GetValue<std::vector<ObjectGuid>>("attackers") : nullptr;
+            if (!attackers) return 0;
+            return PlayerbotThreat::MaximumPercent(attackers->Get(), [&](ObjectGuid guid) -> uint8
+            {
+                Creature* target = ObjectAccessor::GetCreature(*bot, guid);
+                // Resolve on this map update; cached GUIDs cannot authorize stale or unrelated targets.
+                return target && ValidEngagedCreature(*bot, botAI->GetController(), *target) ?
+                    CalculateTarget(*bot, target) : 0;
+            });
+        }
+        if (!qualifier.empty() && qualifier != "current target") return 0;
+        return CalculateTarget(*bot, botAI->GetCurrentTarget());
+    }
+private:
+    uint8 CalculateTarget(Player& player, Creature* target)
+    {
+        Player* bot = &player;
         Group* group = bot ? bot->GetGroup() : nullptr;
         if (!bot || !bot->IsAlive() || !group || !target || !target->IsAlive() ||
             target->IsControlledByPlayer() || target->GetMap() != bot->GetMap() || !target->CanHaveThreatList()) return 0;
@@ -218,7 +258,9 @@ protected:
 void PlayerbotCombatValues::AddContexts(SharedNamedObjectContextList<UntypedValue>& values)
 {
     PlayerbotTargetSelection::AddContexts(values);
+    PlayerbotPartyBuff::AddValues(values);
     auto* factory = new NamedObjectContext<UntypedValue>();
+    factory->creators["party member to dispel"] = [](PlayerbotAI* ai) { return new PartyMemberToDispelValue(ai); };
     factory->creators["estimated group dps"] = [](PlayerbotAI* ai) { return new EstimatedGroupDpsValue(ai); };
     factory->creators["estimated lifetime"] = [](PlayerbotAI* ai) { return new EstimatedLifetimeValue(ai); };
     factory->creators["threat"] = [](PlayerbotAI* ai) { return new ThreatValue(ai); };
@@ -226,4 +268,11 @@ void PlayerbotCombatValues::AddContexts(SharedNamedObjectContextList<UntypedValu
     factory->creators["balance"] = [](PlayerbotAI* ai) { return new BalanceValue(ai); };
     factory->creators["neglect threat"] = [](PlayerbotAI* ai) { return new PlayerbotThreat::NeglectThreatResetValue(ai); };
     values.Add(factory);
+}
+
+ObjectGuid PlayerbotPartySupport::DispelTarget(PlayerbotAI& ai, std::uint32_t dispelType)
+{
+    AiObjectContext* context = ai.GetAiObjectContext();
+    Value<ObjectGuid>* value = context ? context->GetValue<ObjectGuid>("party member to dispel", std::to_string(dispelType)) : nullptr;
+    return value ? value->Get() : ObjectGuid::Empty; // Fresh map-thread lookup, not LazyGet.
 }

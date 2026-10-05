@@ -27,14 +27,26 @@ inline bool ParsePlayerbotControlChat(std::string const& command, PlayerbotContr
 {
     if (command == "follow")
         action = PlayerbotControlCommand::Follow;
-    else if (command == "stay" || command == "hold")
+    else if (command == "stay")
+        action = PlayerbotControlCommand::Stay;
+    else if (command == "hold")
         action = PlayerbotControlCommand::Hold;
     else if (command == "attack" || command == "do attack my target")
         action = PlayerbotControlCommand::Attack;
     else if (command == "stop" || command == "cease")
         action = PlayerbotControlCommand::Cease;
+    else if (command == "buff")
+        action = PlayerbotControlCommand::Rebuff;
     else
         return false;
+    return true;
+}
+inline bool ExtractPlayerbotRangeChat(std::string const& command, std::string& param)
+{
+    if (command == "range") { param.clear(); return true; }
+    if (command.size() <= 5 || command.compare(0, 5, "range") != 0 ||
+        (command[5] != ' ' && command[5] != '\t')) return false;
+    param = command.substr(6);
     return true;
 }
 

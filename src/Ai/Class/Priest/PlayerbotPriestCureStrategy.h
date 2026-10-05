@@ -19,7 +19,7 @@ class CureStrategy final : public Strategy
 public:
     explicit CureStrategy(PlayerbotAI* ai) : Strategy(ai) { }
     std::string const getName() override { return "cure"; }
-    uint32_t GetType() const override { return STRATEGY_TYPE_COMBAT | STRATEGY_TYPE_NONCOMBAT | STRATEGY_TYPE_HEAL; }
+    uint32_t GetType() const override { return STRATEGY_TYPE_COMBAT | STRATEGY_TYPE_NONCOMBAT; } // Utility, not a healer role.
     void InitTriggers(std::vector<TriggerNode*>& triggers) override
     {
         // Cata has no Abolish Disease: wire the donor's real Cure fallback.

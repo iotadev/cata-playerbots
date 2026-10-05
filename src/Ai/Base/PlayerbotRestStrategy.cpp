@@ -4,6 +4,7 @@
  * Released under GNU GPL v2 or any later version.
  */
 #include "PlayerbotRestStrategy.h"
+#include "PlayerbotTargetSelection.h"
 #include "../../Bot/PlayerbotAI.h"
 #include "../../Bot/Engine/Value/Value.h"
 #include "../../Script/PlayerbotConfig.h"
@@ -24,8 +25,10 @@ bool Ready(PlayerbotAI* ai)
     Player* bot = ai ? ai->GetBot() : nullptr;
     Player* owner = ai ? ai->GetController() : nullptr;
     return bot && owner && !ai->LootRequests().Pending() && !ai->LootPursuit().Active() && PlayerbotRest::CanRest(PlayerbotModuleRestEnabled(), bot->IsAlive(),
-        bot->IsInCombat(), bot->IsBeingTeleported(), bot->IsMounted() || bot->IsInFlight(), owner->IsInCombat()) &&
-        owner->IsAlive() && bot->IsWithinDistInMap(owner, 25.0f) && !bot->IsNonMeleeSpellCast(false);
+        bot->IsInCombat(), bot->IsBeingTeleported(), bot->IsMounted() || bot->IsInFlight(),
+        PlayerbotTargetSelection::HasNearbyPartyCombat(*bot, *owner)) &&
+        owner->IsAlive() && bot->IsInWorld() && owner->IsInWorld() && !owner->IsBeingTeleported() &&
+        bot->GetMap() == owner->GetMap() && bot->IsWithinDistInMap(owner, 25.0f) && !bot->IsNonMeleeSpellCast(false);
 }
 bool Needed(Player& bot, PlayerbotRest::Kind kind)
 {
