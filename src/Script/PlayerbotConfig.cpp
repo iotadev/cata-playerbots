@@ -13,6 +13,8 @@
 #include "World.h"
 #include <atomic>
 namespace { std::atomic<bool> RestEnabled { false }; }
+namespace { std::atomic<bool> HealerSaveManaEnabled { false }; }
+bool PlayerbotModuleHealerSaveManaEnabled() { return HealerSaveManaEnabled.load(std::memory_order_relaxed); }
 namespace { std::atomic<bool> PotionsEnabled { false }; }
 namespace { std::atomic<bool> MageArmorEnabled { false }; }
 namespace { std::atomic<bool> LootPassEnabled { false }; }
@@ -63,6 +65,8 @@ bool PlayerbotModuleEnginePriestHealEnabled()
 
 void LoadPlayerbotModuleSettings(World& world, bool moduleConfigsValid)
 {
+    HealerSaveManaEnabled.store(moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.Healing.SaveMana.Enabled", false),
+        std::memory_order_relaxed);
     StrategyControlEnabled.store(moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.StrategyControl.Enabled", false),
         std::memory_order_relaxed);
     StrategyMutationEnabled.store(PlayerbotModuleStrategyControlEnabled() && sConfigMgr->GetBoolDefault("Playerbots.StrategyControl.AddonMutations", false),

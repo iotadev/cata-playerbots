@@ -9,6 +9,7 @@ bool PlayerbotModuleEngineWarriorBuffEnabled();
 bool PlayerbotModuleEngineWarriorCombatEnabled();
 bool PlayerbotModuleEngineMageCombatEnabled();
 bool PlayerbotModuleEnginePriestHealEnabled();
+bool PlayerbotModuleHealerSaveManaEnabled();
 bool PlayerbotModuleEnginePartyBuffEnabled();
 bool PlayerbotModuleRestEnabled();
 bool PlayerbotModulePotionsEnabled();

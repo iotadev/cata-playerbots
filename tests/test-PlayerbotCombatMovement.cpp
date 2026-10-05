@@ -4,6 +4,19 @@
 #include <memory>
 #include <limits>
 using namespace PlayerbotCombatMovement;
+TEST_CASE("Playerbot melee positioning preserves tank role across aggro transitions", "[playerbot][movement]")
+{
+    REQUIRE_FALSE(UsesFrontPosition(false, false));
+    REQUIRE(UsesFrontPosition(true, false));
+    REQUIRE(UsesFrontPosition(false, true));
+    REQUIRE(UsesFrontPosition(true, true));
+    PositionState state{true, true, false, UsesFrontPosition(false, true), false, false, true};
+    REQUIRE_FALSE(Useful(Step::Behind, state));
+    state.Tanking = UsesFrontPosition(false, false);
+    REQUIRE(Useful(Step::Behind, state));
+    state.Tanking = UsesFrontPosition(true, false);
+    REQUIRE_FALSE(Useful(Step::Behind, state));
+}
 TEST_CASE("Playerbot range mailbox copies one bounded request and consumes it once", "[playerbot][movement]")
 {
     RangeMailbox mailbox;

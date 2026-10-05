@@ -1090,7 +1090,8 @@ void PlayerbotSessionBehavior::UpdateServerOriginCombat(uint32 diff)
         }
         else if (PlayerbotCombatMovement::CanMove(*_player))
         {
-            bool tanking = target->GetVictim() == _player;
+            bool tanking = PlayerbotCombatMovement::UsesFrontPosition(
+                target->GetVictim() == _player, PlayerbotRoles::IsTank(*_player));
             _serverOriginMeleeStance = tanking ? 2 : 1;
             _player->GetMotionMaster()->MoveChase(target, std::nullopt, ChaseAngle(PlayerbotGroup::MeleeChaseAngle(tanking)));
         }
@@ -1289,7 +1290,8 @@ void PlayerbotSessionBehavior::UpdateServerOriginCombat(uint32 diff)
             return;
         }
 
-        bool tanking = target->GetVictim() == _player;
+        bool tanking = PlayerbotCombatMovement::UsesFrontPosition(
+            target->GetVictim() == _player, PlayerbotRoles::IsTank(*_player));
         uint8 stance = tanking ? 2 : 1;
         if (stance != _serverOriginMeleeStance && PlayerbotCombatMovement::CanMove(*_player))
         {

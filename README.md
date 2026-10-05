@@ -39,13 +39,15 @@ travel, group formation and full dungeon/class parity remain future work.
 
 ## Validation
 
-The current Windows development tree builds worldserver and passes all 318
-registered tests. The core also passed a build with both optional modules
-disabled and 19 core checks. The current Linux source also builds worldserver
-and passes all 318 tests on Ubuntu 22.04/GCC 11.4 with normal PCH enabled.
+The current Windows and Linux development trees build worldserver and pass all
+324 registered tests. Linux uses Ubuntu 22.04/GCC 11.4 with normal PCH enabled.
+The core also passed a Windows build with both optional modules disabled and
+19 core checks at the preceding milestone.
 A separate GCC 13.3 protocol/group-policy check passed 30 cases and 4,380
 assertions. Builds validated the milestone source before its final documentation
-and commit. Linux server runtime has not been validated.
+and commit. The later healer conservation, melee positioning and recovery metadata
+slices passed on both platforms as an uncommitted source snapshot. Linux server
+runtime has not been validated.
 
 The 2026-10-04 outdoor party check observed all four bots engaging, role actions,
 Mage damage, Priest Renew casts, return to noncombat and native corpse opening.
@@ -60,6 +62,12 @@ trash pulls; logs recorded Warrior role actions, Mage damage casts, Priest Renew
 return to noncombat and native corpse opening. All disposable services stopped
 cleanly with no assertion found. This is a basic operational party milestone;
 full clears, sustained healing/recovery and the optional timing checks remain open.
+
+A longer October 5 Ragefire session observed eating/drinking, Mage/Priest drink
+starts, repeated healing and tank aggro recovery, plus owner-death holding and
+follow resumption after recovery. Services shut down cleanly. This accepts basic
+recovery operation; it does not establish quantitative mana savings, detailed
+tank orientation, Priest resurrection or a full dungeon clear.
 
 The Lua 5.1 communication mock covers the installed Cata addon reader accepting
 an ACK while pending and rejecting a late ACK after its timer expires.
@@ -89,6 +97,11 @@ config directory and configure it deliberately. The default layout places
 `modules/playerbots.conf` beside `worldserver.conf`; `Modules.ConfigDirectory`
 can select another location. Bot admission and optional features default off.
 Building the module does not create accounts or characters.
+
+The optional `Playerbots.Healing.SaveMana.Enabled` policy applies donor mana
+conservation to the ported Priest heals. It defaults off. Its percentage estimates
+guide spell selection; native Cata spell costs and healing remain authoritative.
+It still needs sustained-party qualification before broader use.
 
 ## Chat and addon controls
 

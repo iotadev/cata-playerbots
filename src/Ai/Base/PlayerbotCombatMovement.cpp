@@ -40,8 +40,7 @@ bool Ready(PlayerbotAI* ai, Step step, bool refresh = false)
         ai->GetRestSpellId() || ai->LootRequests().Pending() || ai->LootPursuit().Active())
         return false;
     if (refresh) return caster;
-    bool tanking = target->GetVictim() == bot ||
-        PlayerbotRoles::IsTank(*bot);
+    bool tanking = UsesFrontPosition(target->GetVictim() == bot, PlayerbotRoles::IsTank(*bot));
     PositionState state{target->IsWithinMeleeRange(bot), bot->HasInArc(2.0f * float(M_PI) / 3.0f, target),
         !target->HasInArc(float(M_PI), bot), tanking, !bot->IsStopped(), target->isMoving(),
         bot->GetMotionMaster()->GetCurrentMovementGeneratorType() == CHASE_MOTION_TYPE,
@@ -74,7 +73,8 @@ public:
             bot->GetMotionMaster()->MoveChase(target, GetRange(*botAI, "spell"));
         else
             bot->GetMotionMaster()->MoveChase(target, std::nullopt,
-                ChaseAngle(PlayerbotGroup::MeleeChaseAngle(step == Step::Reach && target->GetVictim() == bot)));
+                ChaseAngle(PlayerbotGroup::MeleeChaseAngle(
+                    UsesFrontPosition(target->GetVictim() == bot, PlayerbotRoles::IsTank(*bot)))));
         TC_LOG_INFO("server", "PB-MOVE: %s requested %s toward %s", bot->GetName().c_str(), name.c_str(), target->GetName().c_str());
         return true; // Chase submission is not confirmed arrival.
     }

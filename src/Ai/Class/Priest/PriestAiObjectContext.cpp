@@ -332,6 +332,8 @@ private:
             return false;
         if (PlayerbotPriest::ShouldDeferHealing(bot, member))
             return false;
+        if (!PlayerbotPriest::ManaAllowsHealing(bot, member, spellId))
+            return false;
         if (spellId == 17)
             return !member.HasAura(17) && !member.HasAura(6788);
         if (spellId == 139)

@@ -18,6 +18,12 @@ class Creature;
 namespace PlayerbotCombatMovement
 {
 enum class Step { Facing, Reach, Behind, ReachSpell };
+// Donor behind positioning excludes the current victim. The Cata companion
+// adapter also excludes its designated tank while that tank recovers aggro.
+inline bool UsesFrontPosition(bool currentVictim, bool designatedTank)
+{
+    return currentVictim || designatedTank;
+}
 // Donor CanMove checks, expressed without native objects for policy coverage.
 // Ghost/vehicle movement is outside the current companion adapter.
 struct ControlState

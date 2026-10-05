@@ -4,6 +4,7 @@
  * Released under GNU GPL v2 or any later version.
  */
 #include "PlayerbotRestStrategy.h"
+#include "PlayerbotRestItem.h"
 #include "PlayerbotTargetSelection.h"
 #include "../../Bot/PlayerbotAI.h"
 #include "../../Bot/Engine/Value/Value.h"
@@ -40,7 +41,7 @@ bool Needed(Player& bot, PlayerbotRest::Kind kind)
 SpellInfo const* RestSpell(Item const& item, PlayerbotRest::Kind kind)
 {
     ItemTemplate const* proto = item.GetTemplate();
-    if (!proto || proto->GetClass() != ITEM_CLASS_CONSUMABLE || proto->GetSubClass() != ITEM_SUBCLASS_FOOD)
+    if (!proto || !PlayerbotRest::FoodItem(proto->GetClass(), proto->GetSubClass()))
         return nullptr;
     for (ItemEffect const& effect : proto->Effects)
         if (effect.SpellID && effect.Trigger == ITEM_SPELLTRIGGER_ON_USE)
@@ -49,9 +50,10 @@ SpellInfo const* RestSpell(Item const& item, PlayerbotRest::Kind kind)
             // Native CastItemUseSpell executes the first valid on-use effect.
             if (!spell)
                 continue;
-            bool food = spell->GetCategory() == SPELL_CATEGORY_FOOD &&
+            uint32 category = PlayerbotRest::ItemCategory(effect.Category, spell->GetCategory());
+            bool food = category == SPELL_CATEGORY_FOOD &&
                 (spell->HasAura(SPELL_AURA_MOD_REGEN) || spell->HasAura(SPELL_AURA_OBS_MOD_HEALTH));
-            bool drink = spell->GetCategory() == SPELL_CATEGORY_DRINK &&
+            bool drink = category == SPELL_CATEGORY_DRINK &&
                 (spell->HasAura(SPELL_AURA_MOD_POWER_REGEN) || spell->HasAura(SPELL_AURA_OBS_MOD_POWER));
             return (kind == PlayerbotRest::Kind::Food ? food : drink) ? spell : nullptr;
         }
@@ -135,7 +137,7 @@ public:
         bot->GetMotionMaster()->Clear(MOTION_SLOT_IDLE);
         bot->GetMotionMaster()->MoveIdle();
         bot->StopMoving();
-        botAI->BeginRest(spell->Id);
+        botAI->BeginRest(spell->Id, kind == PlayerbotRest::Kind::Drink);
         bot->RequestSpellCast(std::move(pending), spell);
         candidate.Reset();
         // Submission is not native cast success. Update clears failed/absent auras.
@@ -175,9 +177,9 @@ bool PlayerbotRest::Update(PlayerbotAI& ai, bool interrupt)
     Player* bot = ai.GetBot();
     Player* owner = ai.GetController();
     SpellInfo const* spell = sSpellMgr->GetSpellInfo(spellId);
-    bool finished = !bot || !owner || !spell ||
-        (spell->GetCategory() == SPELL_CATEGORY_DRINK ? bot->GetPower(POWER_MANA) >=
-            0.95f * bot->GetMaxPower(POWER_MANA) : bot->GetHealthPct() >= 95.0f);
+    int32 maximum = bot ? bot->GetMaxPower(POWER_MANA) : 0;
+    float mana = maximum > 0 ? 100.0f * bot->GetPower(POWER_MANA) / maximum : 100.0f;
+    bool finished = !bot || !owner || !spell || ai.RestFinished(bot->GetHealthPct(), mana);
     if (interrupt || !Ready(&ai) || finished || !bot->HasAura(spellId))
     {
         if (bot)

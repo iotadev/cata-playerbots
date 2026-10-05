@@ -1,5 +1,115 @@
 # Port provenance and remaining work
 
+## Coordination/recovery operational check — 2026-10-05
+
+The copied level-20 Ragefire party session completed with player-confirmed
+eventual eating/drinking. Console capture records Mage/Priest native drink starts,
+48 accepted Priest heal casts, 86 accepted Mage damage casts, Warrior role actions
+and party-aggro recovery. All four bots held on owner death and resumed following
+after the owner was alive nearby. Priest resurrection was not observed.
+Conservation was enabled only in copied module configuration through the harness's
+optional HealerSaveMana switch; shipped defaults are unchanged. Quantitative mana
+savings, individual suppression decisions and detailed tank orientation were not
+measured. The harness exited zero and all test-owned services shut down cleanly;
+no assertion/fatal match appeared in the console capture. Local runtime evidence
+is retained in ignored `build/playerbot-smoke-20261005-113123/` in the core tree.
+This accepts basic coordination/recovery operation, not full dungeon or class parity.
+
+## Coordination/recovery batch Linux validation — 2026-10-05
+
+The current local healer-conservation, melee-positioning and recovery-metadata
+batch built Release worldserver/tests-common on Ubuntu 22.04/GCC 11.4 with both
+modules enabled and normal core/script PCH. All 324 CTest checks passed, matching
+Windows's 324-check result. The saved native-filesystem source copy was refreshed
+with every changed/new module file; this validates an uncommitted snapshot, not
+an exact published revision. Logs remain local under the ignored core directory
+`build/linux-coordination-20261005/`. The compiler container was stopped afterward;
+game realms were not started. Linux runtime and sustained native behavior of
+these new slices remain untested. Earlier slice counts below describe their
+initial Windows checkpoints.
+
+## Recovery item metadata and completion mode — 2026-10-05
+
+Donor `src/Mgr/Item/ItemVisitors.h: FindFoodVisitor::Accept` and
+`src/Ai/Base/Actions/UseItemAction.cpp` at
+`037c01418b5d01506917a3db9b44fd56ac5f965c` identify food/drink through
+consumable or food subclasses and item on-use categories. Cata stores these
+categories on `ItemEffect`; its native Player buying path also consults those
+categories. Recovery execution previously required only the food subclass and
+consulted SpellInfo's category, while ready-check counting already accepted
+both subclasses and preferred the item category.
+
+Both paths now share subclass/category translation. Recovery retains its stricter
+regen-aura requirement and first valid on-use effect selection; readiness still
+reports stock rather than promising cast eligibility. Native usability, cooldown,
+spell request, consumption and aura checks remain authoritative. Selected eating
+versus drinking mode is recorded alongside the spell ID in map-owned value state,
+so item/spell category differences cannot change the resource used for the 95%
+completion threshold. Cancellation clears both values and retains existing
+combat/transfer interruption and recorded-aura cleanup.
+
+Two regressions cover metadata precedence/subclasses and resource completion/reset.
+Windows worldserver/tests-common built and all 324 registered tests passed.
+The complete batch also passed Linux's 324-check suite. Native recovery
+observations remain pending for a sustained-party session. No item data,
+free supplies, regeneration amounts or readiness thresholds are changed.
+
+## Consistent melee role positioning — 2026-10-05
+
+Source comparison against donor master
+`037c01418b5d01506917a3db9b44fd56ac5f965c`,
+`src/Ai/Base/Actions/MovementActions.cpp: SetBehindTargetAction::Execute`,
+confirmed its current-victim exclusion. The existing Cata movement eligibility
+also excludes designated tanks, an adapter role policy rather than an exact
+copy of that donor action. Initial attack, ongoing stance reconciliation and
+the reach action previously used only the victim check when submitting chase.
+They now share the eligibility policy: current victims and designated tanks
+request front positioning; non-tank attackers without aggro retain rear chase.
+This avoids competing role decisions during tank aggro recovery and also keeps
+the legacy combat fallback consistent. Native chase/path handling, movement
+permission, target authority and behind-action eligibility remain unchanged.
+
+One policy regression covers all role/victim combinations and behind eligibility
+after aggro loss. Windows worldserver/tests-common built; all 322 tests passed.
+The complete batch subsequently passed 324 tests on Windows and Linux. Native
+positioning remains pending; this is not confirmation
+that the earlier Warrior facing/idle observation has been resolved. Include it
+in the next useful party session rather than requiring an isolated client test.
+
+## Optional healer mana conservation — 2026-10-05
+
+Refreshed upstream master in an isolated reference checkout; it remains pinned
+at `037c01418b5d01506917a3db9b44fd56ac5f965c`. Donor sources are
+`src/Ai/Base/Strategy/ConserveManaStrategy.cpp`,
+`HealerAutoSaveManaMultiplier::GetValue`, `src/Ai/Class/Priest/PriestActions.h`
+and `src/PlayerbotAIConfig.cpp`.
+
+The port retains the donor 60% mana threshold, integer percentage snapshots,
+65%/45% health guards, tank estimate scaling and efficiency comparisons.
+Party Heal estimates 50% at medium efficiency; Flash Heal estimates 15% at low
+efficiency; Renew and Shield estimate 15% at very high efficiency. These are
+donor scheduling heuristics, not Cata healing formulas. In particular, donor low
+mana suppresses Flash Heal on non-tanks even at low health; tank health below
+45% bypasses that efficiency restriction. Slower/efficient healing alternatives
+remain available through existing action fallback.
+
+`Playerbots.Healing.SaveMana.Enabled = 0` is an optional module-local gate.
+The current Cata healing actions can try several native candidates; conservation
+therefore filters each candidate at action eligibility/execution rather than
+porting the donor multiplier's single-target RTTI hierarchy prematurely. Both
+the named engine actions and legacy HealParty fallback use the same policy.
+Target health, mana and role are resolved on the current map update, with native
+cast eligibility still authoritative. The existing party-action model includes
+self among candidates, so it applies these party estimates to self as well.
+No new spells, mana restoration, character data or thread ownership is introduced.
+
+Three policy tests cover efficiency/overheal boundaries, tank emergencies,
+donor percentage truncation and disabled/unported paths. Windows worldserver
+and tests-common built successfully; all 321 registered checks passed. The
+prior 318-check Linux validation belongs to the committed operational milestone;
+the complete new batch subsequently passed Linux worldserver/tests-common and 324 tests.
+Native sustained-party behavior is pending and can join later dungeon play.
+
 ## Shared-state operational party milestone — 2026-10-05
 
 The corrected dedicated dungeon-entry fixture completed all four bot arrivals

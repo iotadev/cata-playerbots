@@ -247,3 +247,9 @@ Playerbots.StrategyControl.AddonMutations = 0
 # ACK follows execution or timeout. Unresolved timeout outcomes are unknown:
 # refresh STATE before retrying a toggle. No rollback or automatic retry.
 Playerbots.StrategyControl.GroupMutations = 0
+
+# Donor automatic healer mana conservation for the currently ported Priest heals.
+# Below/equal to 60% mana, preserve donor efficiency/overheal guards and tank
+# exceptions. Estimates are scheduling hints; native Cata spells still heal.
+# Optional until qualified under sustained party pressure. Default: disabled.
+Playerbots.Healing.SaveMana.Enabled = 0

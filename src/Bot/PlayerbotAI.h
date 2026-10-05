@@ -8,6 +8,7 @@
 #include "ObjectGuid.h"
 #include "../Ai/Base/PlayerbotCorpseLoot.h"
 #include "../Ai/Base/PlayerbotPartySupport.h"
+#include "../Ai/Base/PlayerbotRestItem.h"
 #include "ForceRebuff.h"
 
 class Creature;
@@ -48,10 +49,11 @@ public:
     ForceRebuffState const& Rebuff() const { return forceRebuff; }
     void SetCurrentTarget(ObjectGuid guid) { targetGuid = guid; }
     void ClearCurrentTarget() { targetGuid.Clear(); }
-    // Map-owned rest state contains only a spell identity, never an item/player pointer.
-    void BeginRest(uint32 spellId) { restSpellId = spellId; }
-    uint32 GetRestSpellId() const { return restSpellId; }
-    void ClearRest() { restSpellId = 0; }
+    // Map-owned rest state contains a spell identity and recovery mode, no pointers.
+    void BeginRest(uint32 spellId, bool drinking) { rest.Begin(spellId, drinking); }
+    uint32 GetRestSpellId() const { return rest.Spell; }
+    bool RestFinished(float health, float mana) const { return rest.Finished(health, mana); }
+    void ClearRest() { rest.Clear(); }
     PlayerbotCorpseLoot::Mailbox& LootRequests() { return lootRequests; }
     PlayerbotCorpseLoot::AttemptHistory& LootAttempts() { return lootAttempts; }
     void RecordDefeatedCreature(ObjectGuid guid, uint32 now) { defeatedCreature = guid; lootCandidates.Add(guid, now); }
@@ -70,7 +72,7 @@ private:
     Engine const* decisionEngine = nullptr;
     ObjectGuid controllerGuid;
     ObjectGuid targetGuid;
-    uint32 restSpellId = 0;
+    PlayerbotRest::ActiveRest rest;
     bool spellChaseRefresh = false; // map-owned, rechecked against current native victim
     bool stayActive = false; // map-owned, never a cross-session movement authority
     PlayerbotCorpseLoot::Mailbox lootRequests;

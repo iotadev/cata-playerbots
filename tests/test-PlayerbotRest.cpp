@@ -3,9 +3,38 @@
  * Released under GNU GPL v2 or any later version.
  */
 #include "../src/Ai/Base/PlayerbotRestStrategy.h"
+#include "../src/Ai/Base/PlayerbotRestItem.h"
 #include "../src/Ai/Base/PlayerbotTargetSelection.h"
 #include <catch2/catch.hpp>
 #include <memory>
+
+TEST_CASE("Playerbot recovery item metadata matches donor food subclasses and category precedence", "[PlayerbotRest]")
+{
+    using namespace PlayerbotRest;
+    REQUIRE(FoodItem(ITEM_CLASS_CONSUMABLE, ITEM_SUBCLASS_FOOD));
+    REQUIRE(FoodItem(ITEM_CLASS_CONSUMABLE, ITEM_SUBCLASS_CONSUMABLE));
+    REQUIRE_FALSE(FoodItem(ITEM_CLASS_CONSUMABLE, ITEM_SUBCLASS_POTION));
+    REQUIRE_FALSE(FoodItem(ITEM_CLASS_WEAPON, ITEM_SUBCLASS_FOOD));
+    REQUIRE(ItemCategory(SPELL_CATEGORY_DRINK, SPELL_CATEGORY_FOOD) == SPELL_CATEGORY_DRINK);
+    REQUIRE(ItemCategory(0, SPELL_CATEGORY_FOOD) == SPELL_CATEGORY_FOOD);
+    REQUIRE(ItemCategory(7, SPELL_CATEGORY_DRINK) == 7);
+    REQUIRE(ItemCategory(0, 0) == 0);
+}
+TEST_CASE("Playerbot rest completion preserves the selected recovery mode and clears it", "[PlayerbotRest]")
+{
+    PlayerbotRest::ActiveRest rest;
+    rest.Begin(123, true);
+    REQUIRE(rest.Spell == 123);
+    REQUIRE_FALSE(rest.Finished(100, 94));
+    REQUIRE(rest.Finished(10, 95));
+    rest.Begin(456, false);
+    REQUIRE(rest.Spell == 456);
+    REQUIRE_FALSE(rest.Finished(94, 100));
+    REQUIRE(rest.Finished(95, 10));
+    rest.Clear();
+    REQUIRE(rest.Spell == 0);
+    REQUIRE_FALSE(rest.Drinking);
+}
 
 TEST_CASE("Playerbot food strategy keeps donor registry names and low relevance", "[PlayerbotRest]")
 {

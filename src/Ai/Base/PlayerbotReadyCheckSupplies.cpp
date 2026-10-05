@@ -2,6 +2,7 @@
  * at 037c01418b5d01506917a3db9b44fd56ac5f965c. GPL v2 or later. See PORTING.md. */
 #include "PlayerbotReadyCheckSupplies.h"
 #include "PlayerbotPotionStrategy.h"
+#include "PlayerbotRestItem.h"
 #include "Bag.h"
 #include "Item.h"
 #include "Player.h"
@@ -16,7 +17,7 @@ PlayerbotReadyCheck::Supplies PlayerbotReadyCheck::CarriedSupplies(Player& bot)
         if (!item || !item->GetCount() || bot.CanUseItem(item) != EQUIP_ERR_OK) return;
         ItemTemplate const* proto = item->GetTemplate();
         if (!proto || proto->GetClass() != ITEM_CLASS_CONSUMABLE) return;
-        bool foodItem = proto->GetSubClass() == ITEM_SUBCLASS_CONSUMABLE || proto->GetSubClass() == ITEM_SUBCLASS_FOOD;
+        bool foodItem = PlayerbotRest::FoodItem(proto->GetClass(), proto->GetSubClass());
         bool food = false, drink = false, firstUse = true;
         // Stock is not current cast readiness: cooldown/need checks belong to execution.
         bool heal = PlayerbotPotion::RecoverySpell(*item, PlayerbotPotion::Kind::Healing) != nullptr;
@@ -28,7 +29,7 @@ PlayerbotReadyCheck::Supplies PlayerbotReadyCheck::CarriedSupplies(Player& bot)
             if (!spell) continue;
             if (firstUse && foodItem)
             {
-                uint32 category = effect.Category ? effect.Category : spell->GetCategory();
+                uint32 category = PlayerbotRest::ItemCategory(effect.Category, spell->GetCategory());
                 food = category == SPELL_CATEGORY_FOOD;
                 drink = category == SPELL_CATEGORY_DRINK;
             }

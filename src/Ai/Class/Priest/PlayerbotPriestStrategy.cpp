@@ -15,6 +15,9 @@
 #include "PlayerbotCombatDecision.h"
 #include "PlayerbotPartyBuffStrategy.h"
 #include "PlayerbotTargetSelection.h"
+#include "PlayerbotHealingMana.h"
+#include "PlayerbotRoles.h"
+#include "../../../Script/PlayerbotConfig.h"
 #include "Spell.h"
 #include "SpellInfo.h"
 
@@ -94,6 +97,14 @@ bool PlayerbotPriest::ShouldDeferHealing(Player const& bot, Player const& target
     // Cheap policy gates avoid inspecting native casts for emergencies or raids.
     return group && DeferToIncomingHeal(target.GetHealthPct(), group->isRaidGroup(), true) &&
         HasIncomingDirectHeal(bot, target);
+}
+
+bool PlayerbotPriest::ManaAllowsHealing(Player const& bot, Player const& target, std::uint32_t spell)
+{
+    int32 maximum = bot.GetMaxPower(POWER_MANA);
+    float mana = maximum > 0 ? 100.0f * bot.GetPower(POWER_MANA) / maximum : 0.0f;
+    return PlayerbotHealingMana::Allows(PlayerbotModuleHealerSaveManaEnabled(), mana,
+        target.GetHealthPct(), PlayerbotRoles::IsTank(target), PlayerbotHealingMana::ForPriestSpell(spell));
 }
 
 Player* PlayerbotPriest::ResurrectionTarget(Player& bot, float range, Player* owner, bool nearOwner)
@@ -180,7 +191,7 @@ bool PlayerbotPriest::HealParty(Player& bot, Player* owner)
         float healthPct = target->GetHealthPct();
         if (ShouldDeferHealing(bot, *target))
             return false;
-        if (healthPct < 35.0f && bot.HasSpell(17) &&
+        if (healthPct < 35.0f && bot.HasSpell(17) && ManaAllowsHealing(bot, *target, 17) &&
             !target->HasAura(17) && !target->HasAura(6788) &&
             PlayerbotDecision::TryCast(bot, *target, 17, "Power Word: Shield"))
             return true;
@@ -188,15 +199,15 @@ bool PlayerbotPriest::HealParty(Player& bot, Player* owner)
         switch (TierForHealth(healthPct))
         {
             case HealTier::Emergency:
-                if (bot.HasSpell(2061) && PlayerbotDecision::TryCast(bot, *target, 2061, "Flash Heal"))
+                if (bot.HasSpell(2061) && ManaAllowsHealing(bot, *target, 2061) && PlayerbotDecision::TryCast(bot, *target, 2061, "Flash Heal"))
                     return true;
                 [[fallthrough]];
             case HealTier::Heal:
-                if (bot.HasSpell(2050) && PlayerbotDecision::TryCast(bot, *target, 2050, "Heal"))
+                if (bot.HasSpell(2050) && ManaAllowsHealing(bot, *target, 2050) && PlayerbotDecision::TryCast(bot, *target, 2050, "Heal"))
                     return true;
                 [[fallthrough]];
             case HealTier::Renew:
-                return bot.HasSpell(139) && !target->HasAura(139, bot.GetGUID()) &&
+                return bot.HasSpell(139) && ManaAllowsHealing(bot, *target, 139) && !target->HasAura(139, bot.GetGUID()) &&
                     PlayerbotDecision::TryCast(bot, *target, 139, "Renew");
             case HealTier::None:
                 return false;

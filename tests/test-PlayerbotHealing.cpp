@@ -9,8 +9,48 @@
 
 #include "catch2/catch.hpp"
 #include "../src/Ai/Class/Priest/PlayerbotPriestStrategy.h"
+#include "../src/Ai/Base/PlayerbotHealingMana.h"
 #include <limits>
 #include <memory>
+
+TEST_CASE("Playerbot low mana conserves routine heals without suppressing the donor tank emergency", "[PlayerbotPriest][Mana]")
+{
+    using namespace PlayerbotHealingMana;
+    auto flash = ForPriestSpell(2061);
+    auto heal = ForPriestSpell(2050);
+    REQUIRE(Allows(true, 61, 50, false, flash));
+    REQUIRE_FALSE(Allows(true, 60, 50, false, flash));
+    REQUIRE(Allows(true, 60, 44, true, flash));
+    REQUIRE_FALSE(Allows(true, 60, 45, true, flash));
+    REQUIRE(Allows(true, 60, 50, false, heal));
+    REQUIRE_FALSE(Allows(true, 60, 51, false, heal));
+    REQUIRE(Allows(true, 60, 60, true, heal));
+    REQUIRE_FALSE(Allows(true, 60, 65, true, heal));
+}
+
+TEST_CASE("Playerbot donor heal estimates keep tank scaling and efficient aura boundaries", "[PlayerbotPriest][Mana]")
+{
+    using namespace PlayerbotHealingMana;
+    auto renew = ForPriestSpell(139);
+    auto shield = ForPriestSpell(17);
+    REQUIRE(Allows(true, 60, 85, false, renew));
+    REQUIRE_FALSE(Allows(true, 60, 86, false, renew));
+    REQUIRE(Allows(true, 60, 90, true, shield));
+    REQUIRE_FALSE(Allows(true, 60, 91, true, shield));
+    // Donor native percentages truncate before threshold comparison.
+    REQUIRE_FALSE(Allows(true, 60.9f, 50, false, ForPriestSpell(2061)));
+    REQUIRE(Allows(true, 60, 85.9f, false, renew));
+}
+
+TEST_CASE("Playerbot healer conservation preserves disabled and unported spell paths", "[PlayerbotPriest][Mana]")
+{
+    using namespace PlayerbotHealingMana;
+    REQUIRE(Allows(false, 1, 95, false, ForPriestSpell(2061)));
+    REQUIRE(Allows(true, 1, 95, false, ForPriestSpell(2006)));
+    REQUIRE_FALSE(Allows(true, std::numeric_limits<float>::quiet_NaN(), 50, true, ForPriestSpell(2050)));
+    REQUIRE_FALSE(Allows(true, 50, 0, true, ForPriestSpell(2050)));
+    REQUIRE_FALSE(Allows(true, 101, 50, true, ForPriestSpell(2050)));
+}
 
 TEST_CASE("Playerbot named healing selection keeps distance probe before health thresholds", "[PlayerbotPriest]")
 {
