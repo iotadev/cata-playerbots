@@ -14,10 +14,17 @@
 #include <atomic>
 namespace { std::atomic<bool> RestEnabled { false }; }
 namespace { std::atomic<bool> HealerSaveManaEnabled { false }; }
+namespace { std::atomic<bool> StarterGearScoreEnabled { false }; }
+namespace { std::atomic<bool> StarterEquipEnabled { false }; }
+bool PlayerbotModuleStarterEquipEnabled() { return StarterEquipEnabled.load(std::memory_order_relaxed); }
+bool PlayerbotModuleStarterGearScoreEnabled() { return StarterGearScoreEnabled.load(std::memory_order_relaxed); }
 bool PlayerbotModuleHealerSaveManaEnabled() { return HealerSaveManaEnabled.load(std::memory_order_relaxed); }
 namespace { std::atomic<bool> PotionsEnabled { false }; }
 namespace { std::atomic<bool> MageArmorEnabled { false }; }
 namespace { std::atomic<bool> LootPassEnabled { false }; }
+namespace { std::atomic<bool> LootRollEnabled { false }; }
+bool PlayerbotModuleLootRollEnabled()
+{ return LootRollEnabled.load(std::memory_order_relaxed) && !PlayerbotModuleLootPassEnabled(); }
 namespace { std::atomic<bool> CorpseLootEnabled { false }; }
 namespace { std::atomic<bool> ReadyCheckEnabled { false }; }
 namespace { std::atomic<bool> ReadyCheckRebuffEnabled { false }; }
@@ -65,6 +72,10 @@ bool PlayerbotModuleEnginePriestHealEnabled()
 
 void LoadPlayerbotModuleSettings(World& world, bool moduleConfigsValid)
 {
+    StarterGearScoreEnabled.store(moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.Equipment.StarterScore.Enabled", false),
+        std::memory_order_relaxed);
+    StarterEquipEnabled.store(PlayerbotModuleStarterGearScoreEnabled() &&
+        sConfigMgr->GetBoolDefault("Playerbots.Equipment.StarterEquip.Enabled", false), std::memory_order_relaxed);
     HealerSaveManaEnabled.store(moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.Healing.SaveMana.Enabled", false),
         std::memory_order_relaxed);
     StrategyControlEnabled.store(moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.StrategyControl.Enabled", false),
@@ -83,10 +94,16 @@ void LoadPlayerbotModuleSettings(World& world, bool moduleConfigsValid)
         std::memory_order_relaxed);
     PlayerbotDevFixture::SetEnabled(moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.Dev.Enabled", false) &&
         sConfigMgr->GetBoolDefault("Playerbots.Dev.Fixture20.Enabled", false));
+    PlayerbotDevFixture::SetRollFixtureEnabled(moduleConfigsValid &&
+        sConfigMgr->GetBoolDefault("Playerbots.Dev.Enabled", false) &&
+        sConfigMgr->GetBoolDefault("Playerbots.Dev.Fixture20.Enabled", false) &&
+        sConfigMgr->GetBoolDefault("Playerbots.Dev.LootRollFixture.Enabled", false));
     CorpseLootEnabled.store(moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.Loot.Corpses.Enabled", false),
         std::memory_order_relaxed);
     LootPassEnabled.store(moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.Loot.PassOnGroupLoot", false),
         std::memory_order_relaxed);
+    LootRollEnabled.store(PlayerbotModuleStarterGearScoreEnabled() &&
+        sConfigMgr->GetBoolDefault("Playerbots.Loot.Rolls.Enabled", false), std::memory_order_relaxed);
     MageArmorEnabled.store(moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.Mage.Armor.Enabled", false),
         std::memory_order_relaxed);
     RestEnabled.store(moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.Rest.Enabled", false),

@@ -7,6 +7,11 @@
 #include "../Bot/Cmd/PlayerbotStrategyControl.h"
 #include "PlayerbotRoster.h"
 #include "../Ai/Base/PlayerbotCombatMovement.h"
+#include "../Ai/Base/PlayerbotEquipmentInspection.h"
+#include "PlayerbotSecurity.h"
+#include "PlayerbotSessionHooks.h"
+#include "PlayerbotConfig.h"
+#include "Timer.h"
 #include "Chat.h"
 #include "Group.h"
 #include "Player.h"
@@ -17,6 +22,45 @@
 
 namespace
 {
+void RequestGearApply(Player& sender, ObjectGuid botGuid)
+{
+    ChatHandler reply(sender.GetSession());
+    WorldSession* session = sWorld->FindServerOriginPlayerbot(botGuid);
+    Player* bot = session ? session->GetPlayer() : nullptr;
+    if (!bot || !bot->IsInWorld() || bot->GetGUID() != botGuid)
+    { reply.SendSysMessage("That Playerbot is unavailable."); return; }
+    if (!PlayerbotSecurity(*bot).CheckLevelFor(PLAYERBOT_SECURITY_ALLOW_ALL, sender))
+    { reply.SendSysMessage("You do not control that Playerbot."); return; }
+    if (!PlayerbotModuleStarterEquipEnabled() || !PlayerbotModuleStarterGearScoreEnabled())
+    { reply.SendSysMessage("Native starter gear changes are disabled."); return; }
+    if (session->GetServerOriginFollowTargetGuidLow() != sender.GetGUID().GetCounter() &&
+        session->GetServerOriginPartyControllerGuidLow() != sender.GetGUID().GetCounter())
+    { reply.SendSysMessage("That Playerbot must be attached to you before applying gear."); return; }
+    reply.SendSysMessage(session->RequestPlayerbotEquip(sender.GetGUID().GetCounter()) ?
+        "One gear change requested; wait for the map-thread completion reply." : "A gear request is already pending or the gate changed.");
+}
+void ReportGear(Player& sender, ObjectGuid botGuid)
+{
+    ChatHandler reply(sender.GetSession());
+    WorldSession* session = sWorld->FindServerOriginPlayerbot(botGuid);
+    Player* bot = session ? session->GetPlayer() : nullptr;
+    if (!bot || !bot->IsInWorld() || bot->GetGUID() != botGuid)
+    { reply.SendSysMessage("That Playerbot is unavailable."); return; }
+    if (!PlayerbotSecurity(*bot).CheckLevelFor(PLAYERBOT_SECURITY_ALLOW_ALL, sender))
+    { reply.SendSysMessage("You do not control that Playerbot."); return; }
+    bool enabled = PlayerbotModuleStarterGearScoreEnabled();
+    if (!enabled)
+    { reply.SendSysMessage("Read-only starter gear inspection is disabled."); return; }
+    auto snapshot = session->GetPlayerbotStrategySnapshot();
+    if (!snapshot || snapshot->Bot != botGuid.GetCounter() || !bot->IsAlive() || bot->IsBeingTeleported() ||
+        !PlayerbotEquipmentInspection::Fresh(enabled, snapshot->EquipmentEnabled, getMSTime(), snapshot->EquipmentCreated))
+    { reply.SendSysMessage("The gear inspection snapshot is not ready; try again shortly."); return; }
+    if (!snapshot->EquipmentAvailable)
+    { reply.PSendSysMessage("Playerbot %s: starter gear survey unavailable for this level/spec/state (supported levels 10-39).", bot->GetName().c_str()); return; }
+    reply.PSendSysMessage("Playerbot %s: read-only gear survey, %u slot alternatives; showing %u. No items changed.",
+        bot->GetName().c_str(), snapshot->EquipmentTotal, uint32(snapshot->EquipmentRows.size()));
+    for (auto const& row : snapshot->EquipmentRows) reply.SendSysMessage(row.c_str());
+}
 class PlayerbotChatCommands final : public PlayerScript
 {
 public:
@@ -31,6 +75,8 @@ public:
 
         std::string command = NormalizePlayerbotControlChat(message);
         ChatHandler reply(sender->GetSession());
+        if (IsPlayerbotGearInspection(command)) { ReportGear(*sender, receiver->GetGUID()); return; }
+        if (IsPlayerbotGearApply(command)) { RequestGearApply(*sender, receiver->GetGUID()); return; }
         if (command == "list")
         {
             std::vector<PlayerbotRosterEntry> roster = PlayerbotRoster::ListActiveFor(*sender);
@@ -90,7 +136,9 @@ public:
         std::string rangeParam;
         bool range = ExtractPlayerbotRangeChat(command, rangeParam);
         bool strategy = PlayerbotStrategyControl::Recognizes(command);
-        if (!range && !strategy && !ParsePlayerbotControlChat(command, action))
+        bool gear = IsPlayerbotGearInspection(command);
+        bool applyGear = IsPlayerbotGearApply(command);
+        if (!applyGear && !gear && !range && !strategy && !ParsePlayerbotControlChat(command, action))
             return;
         if (strategy && !PlayerbotStrategyControl::Parse(command))
         {
@@ -113,6 +161,8 @@ public:
                     group->GetMemberGroup(entry.Guid)))
                 continue;
             // Dispatch independently rechecks native identity and full control.
+            if (gear) { ReportGear(*sender, entry.Guid); continue; }
+            if (applyGear) { RequestGearApply(*sender, entry.Guid); continue; }
             if ((strategy ? PlayerbotControl::DispatchStrategy(*sender, entry.Guid, command) :
                 range ? PlayerbotControl::DispatchRange(*sender, entry.Guid, rangeParam) :
                 PlayerbotControl::Dispatch(*sender, entry.Guid, action)) == PlayerbotControlResult::Queued)

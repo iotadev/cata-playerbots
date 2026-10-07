@@ -9,6 +9,10 @@
 #include "PlayerbotThreatStrategy.h"
 #include "PlayerbotCombatBalance.h"
 #include "PlayerbotTargetSelection.h"
+#include "PlayerbotConsumableUsage.h"
+#include "PlayerbotItemStats.h"
+#include "PlayerbotEquipment.h"
+#include "PlayerbotItemUsage.h"
 #include "../../Bot/PlayerbotAI.h"
 #include "Bag.h"
 #include "Creature.h"
@@ -259,6 +263,10 @@ void PlayerbotCombatValues::AddContexts(SharedNamedObjectContextList<UntypedValu
 {
     PlayerbotTargetSelection::AddContexts(values);
     PlayerbotPartyBuff::AddValues(values);
+    PlayerbotConsumable::AddContexts(values);
+    PlayerbotItemStats::AddContexts(values);
+    PlayerbotEquipment::AddContexts(values);
+    PlayerbotItemUsage::AddContexts(values);
     auto* factory = new NamedObjectContext<UntypedValue>();
     factory->creators["party member to dispel"] = [](PlayerbotAI* ai) { return new PartyMemberToDispelValue(ai); };
     factory->creators["estimated group dps"] = [](PlayerbotAI* ai) { return new EstimatedGroupDpsValue(ai); };

@@ -16,7 +16,7 @@ inline bool SnapshotFresh(PlayerbotStrategySnapshot const& snapshot, uint32_t bo
 {
     // Zero controller is valid for an unattached bot; only native GM read
     // authorization may use that identity. Ordinary callers pass their own GUID.
-    return bot && snapshot.Bot == bot && snapshot.Controller == controller &&
+    return snapshot.StrategiesReady && bot && snapshot.Bot == bot && snapshot.Controller == controller &&
         uint32_t(now - snapshot.Created) < 5000;
 }
 // Preflight the complete response before emitting any BEGIN; failure is never truncation.

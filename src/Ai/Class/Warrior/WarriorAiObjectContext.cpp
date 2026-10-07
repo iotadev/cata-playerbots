@@ -9,6 +9,7 @@
 #include "../../Base/PlayerbotRestStrategy.h"
 #include "../../Base/PlayerbotPotionStrategy.h"
 #include "../../Base/PlayerbotCombatValues.h"
+#include "../../Base/PlayerbotRoles.h"
 #include "../../Base/PlayerbotCombatMovement.h"
 #include "../../Base/PlayerbotPosition.h"
 #include "../../Base/PlayerbotThreatStrategy.h"
@@ -176,7 +177,9 @@ bool PartyMemberHasAggro(Player& bot, Creature const& target)
     if (!victim || victim == &bot || !victim->IsPlayer())
         return false;
     Group* group = bot.GetGroup();
-    return group && group->IsMember(victim->GetGUID());
+    Player* member = victim->ToPlayer();
+    return group && group->IsMember(victim->GetGUID()) && member &&
+        !PlayerbotRoles::IsTankOrMainTank(*member);
 }
 bool HeroicStrikeReady(Player& bot, [[maybe_unused]] Creature const& target)
 {

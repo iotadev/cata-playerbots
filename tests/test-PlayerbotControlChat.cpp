@@ -5,6 +5,18 @@
 #include "../src/Bot/Cmd/PlayerbotControlChat.h"
 #include "../src/Bot/Cmd/PlayerbotStrategyControl.h"
 #include <catch2/catch.hpp>
+TEST_CASE("Playerbot gear inspection recognizes only fixed read commands", "[playerbots][chat]")
+{
+    REQUIRE(IsPlayerbotGearInspection(NormalizePlayerbotControlChat(" GEAR? ")));
+    REQUIRE(IsPlayerbotGearInspection("gear"));
+    REQUIRE(IsPlayerbotGearInspection("gear ?"));
+    for (auto command : {"gear equip", "gear 100", "gear; attack", "equipment", "do equip", "gear ??"})
+        REQUIRE_FALSE(IsPlayerbotGearInspection(command));
+    REQUIRE(IsPlayerbotGearApply("gear apply"));
+    REQUIRE_FALSE(IsPlayerbotGearInspection("gear apply"));
+    REQUIRE_FALSE(IsPlayerbotGearApply("gear apply all"));
+    REQUIRE_FALSE(IsPlayerbotGearApply("gear apply; attack"));
+}
 TEST_CASE("Playerbot chat range extraction keeps fixed controls and command boundaries separate", "[playerbots][chat]")
 {
     std::string param;

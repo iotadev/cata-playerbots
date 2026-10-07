@@ -1,5 +1,620 @@
 # Port provenance and remaining work
 
+## Gear/loot milestone qualification and review — 2026-10-07
+
+The complete local source passed Windows and Linux worldserver/tests-common
+builds with all 384 checks. Linux used the existing native Ubuntu 22.04/GCC 11.4
+Release snapshot, normal PCH and both optional modules enabled; its compiler
+container was stopped after success. The refreshed snapshot builds without Git
+metadata, so validation identifies the copied source rather than a binary Git
+revision. Full test evidence is retained in ignored
+`build/linux-native-loot-20261007/LastTest.log`.
+
+The current Windows core-only worldserver/tests-common build also passed all
+19 checks with both optional modules disabled. No Linux server runtime was run.
+The controlled supported need/greed/pass and saved-award replay below completes
+the runtime check for this milestone; it does not establish full item/class or
+dungeon parity. Test realm, native database and compiler container are stopped.
+
+Review covered the core hooks, native group fence, map/world mailboxes, instance
+and authority checks, score/unknown-input boundaries, new files, fixture-only
+mutations and outgoing documentation. No new blocker was identified. The targeted
+credential/host scan found only the existing synthetic localhost fixture
+credentials, with no personal host identity or API credential in the scanned
+outgoing implementation files. This is a bounded milestone review, not a complete
+security audit. Existing gameplay limits remain recorded below.
+
+## Controlled native need/greed fixture and temporary eligibility — 2026-10-06
+
+The next copied harness replay supports explicit `-ControlledLootRoll` alongside
+the existing reused mixed-party recovery/dungeon/roll recipe. It validates both
+offline Warriors' nonbroken chest 2866, one native Oggleflint spawn in Ragefire,
+and an unused fixture loot ID before any mutation. In the copy only, a transaction
+adds a 100% single chest drop and changes that creature template's loot source.
+Original loot rows remain intact and the prior source is recorded in ignored JSON.
+Four mocked checks execute the actual preparation branch and verify rejection
+of invalid gear, ambiguous spawns and occupied loot IDs before SQL mutation.
+
+Default-off Dev.LootRollFixture.Enabled requires the existing Dev/Fixture20 gates.
+Native map-owned role preparation preserves Testone's original chest in carried
+inventory and leaves the slot empty; Testtwo retains the known equipped chest.
+The normal native item/template reader must admit the non-affixed uncommon item.
+One normal boss kill should therefore exercise Testone need, Testtwo greed and
+caster pass. The human passes to make the expected native award deterministic.
+This intentionally tests an empty-slot decision while preserving existing gear;
+duplicate-stock avoidance and automatic equipment management are separate work.
+After logout, the harness records both vote submissions and the persisted stock
+increase by one. Runtime acceptance requires all three, not just submission logs.
+
+Native CanEquipNewItem rejects armor during combat and native cast locks.
+The adapter now leaves evaluation queued during those temporary states; mailbox
+expiry/world retry can refresh the request while the native roll remains alive.
+It does not bypass equip admission or interrupt combat, casting or recovery.
+The existing expiry regression now covers successful fresh evaluation after an
+expired request. Windows worldserver/tests-common built and 384/384 tests passed;
+four mocked SQL-branch checks and seven harness wait-policy checks also passed.
+Linux validation remains pending. The October 6 controlled replay completed,
+with the player confirming expected behavior on October 7. All four submissions
+refer to the same native roll: Testone need, Testtwo greed, both casters pass.
+`controlled-roll-result.json` records Need=true, Greed=true and SavedAward=true;
+Testone's saved count of chest 2866 increased from one to two. This qualifies the
+controlled need/greed/pass decision and native award for this supported item,
+including saved persistence. It does not establish broader item/class coverage
+or relogin. World database pools closed and MySQL completed normal shutdown;
+no native Cata service process remained at verification. Evidence is in ignored
+`build/playerbot-smoke-20261006-233354/`. No assertion/fatal match was found.
+
+## Connected optional native party rolls — 2026-10-06
+
+Current donor master was verified as `037c01418b5d01506917a3db9b44fd56ac5f965c`.
+LootRollAction::Execute provides the pending-vote iteration and item-usage policy.
+The Cata adapter uses a single bounded request/reply mailbox: native world/group
+code copies a pending roll, the map evaluates current item facts, and world
+execution validates the same live roll before invoking HandleLootRoll.
+
+Core Group helpers expose copied identities and guarded admission, not iterators
+or pointers to the module. Facts bind group/roll, entry/count/slot, native random
+enchantment type/ID, suffix factor and map/instance. Execution repeats membership,
+controller attachment, identity, the current blocked loot entry/count/affix,
+NOT_EMITED_YET and current
+vote mask checks. Need Before Greed also repeats native CanRollNeedForItem.
+The original client/CountRollVote behavior is unchanged; bots use its native
+packet format (GUID, uint32 slot, uint8 choice) only after the additional guard.
+
+Mailbox expiry is five seconds with wrap-safe arithmetic. It stays occupied
+through map evaluation, accepts one completion, and drops late serials/replies.
+World polling is limited to once per second and one outstanding roll per session.
+Map reads require current controller/security, map/instance and native actor
+eligibility; calculations reset the relevant cached survey/stock values.
+Only non-affixed starter equipment and supported consumables are classified.
+Unknown/unsupported facts, random-affix loot and disallowed choices fall back to
+pass. No recipes/tokens/profession/disenchant or vendor/AH classification is added.
+The initial policy uses donor need level 2, greed enabled and disenchant disabled.
+Native admission and native winning-item storage remain authoritative.
+
+Gate Playerbots.Loot.Rolls.Enabled defaults off and requires StarterScore.
+PassOnGroupLoot takes precedence and disables the roll adapter. The optional
+copied harness -LootRolls recipe enables the two necessary gates and disables
+pass-on-group-loot in that copy, alongside normal recovery/dungeon play.
+PB-ROLL reports native submission; a visible vote/award is still runtime evidence.
+Five regressions cover bounded work, expiry/wrap, changed identities, duplicate/
+late replies, refreshed native vote masks and cancellation. The final reviewed
+Windows worldserver/tests-common build passed 384/384 tests. Linux, current
+module-off validation and native party/loot acceptance remain pending.
+
+The subsequent copied Ragefire replay (`build/playerbot-smoke-20261006-224959/`)
+completed four-bot entry and normal party combat. Logs contain 12 PB-ROLL pass
+submissions, one per bot on each of three roll identities (items 9749, 10401, 774).
+No duplicate bot/roll submission appears. No need/greed or winning-item award was
+observed. Harness exit zero, clean world/MySQL shutdown and no remaining native
+Cata processes were confirmed. This establishes pass submission through the
+adapter; full voting/award acceptance remains deferred. The next fixture should
+use a controlled known supported drop in the disposable copy, preserving native
+loot generation and rolling rather than granting an item directly to a bot.
+
+## Unowned non-affixed template comparison — 2026-10-06
+
+The donor QueryItemUsageForEquip creates a temporary Item for native slot
+admission. Cata's existing Player::CanEquipNewItem performs that same dry run,
+creating/deleting a transient Item without storing it in inventory or saving it.
+The new `template equipment comparisons::<item ID>` reader uses FindEquipSlot
+to select native candidate slots, then CanEquipNewItem for admission and the
+existing native/stat-weight/broken-current comparison reader for decisions.
+It does not bypass native uniqueness, skill or class checks. Transient allocation
+can consume a native item GUID; no persistent item is granted or created.
+
+Random-property/suffix templates and supplied nonzero affixes remain unavailable.
+Coupled hand layouts and incomplete existing-instance inputs remain Unknown.
+`template item usage::<item ID>` exposes the resulting typed TemplateEquipment
+fact separately from carried usage, with no owned candidate GUID. The existing
+StarterScore gate still defaults off. This is a hypothetical read-only comparison,
+not proof of actual roll identity, permission to vote, or a native equip request.
+No Group/Roll access, roll packet, loot action or new core hook is added.
+Two regressions cover affix rejection and distinct template/owned identity.
+Windows worldserver/tests-common built and all 379 checks passed for this
+extension. Linux is queued; the last Linux pass remains the 372-test equip batch.
+No client/runtime template-comparison check was run.
+
+## Shared item-usage and read-only roll policy — 2026-10-06
+
+Donor `ItemUsageValue.h`, `ItemUsageValue.cpp: Calculate/QueryItemUsageForEquip`
+and `LootRollAction.cpp: Execute/CalculateRollVote` at
+`037c01418b5d01506917a3db9b44fd56ac5f965c` provide the category identities and
+roll-choice branches. The new `item usage::<item ID>[,<signed property ID>]`
+value composes the existing consumable-stock and carried-equipment readers.
+It returns a typed fact with explicit source scope; unavailable, unported and
+incomplete inputs remain Unknown rather than donor None. An owned safe upgrade/
+empty slot maps to Equip, broken-current replacement to Replace, repair-needed
+candidate to BrokenEquip, and retained stock to Keep. Entry/property matching
+does not imply proof about an unowned loot instance. Equipment still requires
+the existing default-off StarterScore gate and qualified native survey.
+
+The pure roll-choice helper ports need/greed/disenchant, recipe binding, unique
+blocking and configured need downgrade. Its default policy passes; unknown facts
+or invalid need level produce no decision. Unlike donor equipment branches,
+the local helper applies supplied loot permission to all kinds, conservatively.
+No configuration, strategy action, packet handler or Group/Roll mutation is
+enabled. Quest/master synchronization, professions, token eligibility, bags,
+vendor/AH and disenchant classification remain unported; category declarations
+do not claim those readers exist. Master/free-for-all handling, native allowed
+vote masks and membership/vote revalidation belong to the future native adapter.
+
+Cata `CMSG_LOOT_ROLL` is PROCESS_THREADUNSAFE, unlike the PROCESS_INPLACE equip
+route. A later roll adapter must execute through the native world/group owner,
+not inspect or mutate live Group/Roll from the map update. It must resolve the
+actual loot identity/affix and obtain qualified unowned-item usage first; the
+carried-equipment fact is not sufficient. Native GroupHandler::HandleLootRoll
+passes identity/type to Group::CountRollVote; the latter increments totals for
+accepted choices without a NOT_EMITED_YET check or vote-mask check at this call
+boundary. The bot adapter must recheck both on the owner thread and submit at
+most once; session packet dispatch alone does not establish that safety.
+No upstream group behavior was changed. Five regressions cover usage mapping,
+signed-affix matching, incomplete inputs, uniqueness/downgrade and recipe/
+disenchant rules. Windows worldserver/tests-common built and passed 377/377
+checks before the template extension above. Linux qualification remains queued.
+
+## Explicit single-step native starter equip — 2026-10-06
+
+The copied outdoor check subsequently passed: Testone reported native completion
+(`PB-EQUIP` result 3), and the saved inventory after bot logout contained the same
+owned item identities, counts and captured properties. Only candidate item 9758
+moved from its carried position into the previously empty waist slot. The player
+reported success; the harness exited zero and all test-owned services stopped.
+Evidence is retained locally in ignored `build/playerbot-smoke-20261006-113536/`
+(`gear-before.json`, `gear-after.json` and console logs). This qualifies one
+empty-slot move and saved persistence, not relogin, occupied-slot displacement,
+automatic equipment selection or broader class/score coverage.
+
+Donor `EquipAction.cpp: EquipItem` and `ItemUsageValue.cpp: QueryItemUsageForEquip`
+at `037c01418b5d01506917a3db9b44fd56ac5f965c` use native inventory admission and
+swap/equip execution rather than database rewrites. Cata's exact-slot handler is
+PROCESS_INPLACE, accepted by MapSessionFilter, and delegates to Player::SwapItem.
+A narrow session hook posts copied requester intent; world-thread chat never
+mutates inventory. `gear apply` requires default-off StarterEquip and StarterScore
+gates, full control and attachment. Map execution repeats current authority,
+attachment, expiry, alive/same-map, transfer/combat/cast and rest/loot checks.
+
+One mailbox request remains busy through completion. Calculated candidate/stat
+dependencies are refreshed without resetting manual strategy/range values. Only
+Upgrade/FillSlot/ReplaceBroken are actionable. The first safe carried candidate
+in existing survey order is re-resolved against owner, destination identity,
+item/affix/factor, carried location and native CanEquipItem before the native
+exact-slot handler runs. At most one change is submitted per explicit request;
+success requires that item GUID in the destination slot. Relevant snapshots and
+obsolete queued actions are invalidated afterward. Queued is not completed.
+No autonomous loop, bags, repairs, purchases, loot votes or custom persistence
+are added; starter-model limits remain.
+
+Three new tests cover mailbox completion ownership, five-second expiry/wrap and
+safe actionable decisions; parser checks reject extra apply arguments. Whitespace
+checks pass. Windows worldserver/tests-common built and passed 372/372 tests.
+Linux worldserver/tests-common also built and passed 372/372 tests; the compiler
+container was stopped afterward. Native slot changes,
+displaced-item preservation, relogin and repeat-request behavior were not covered
+by that build qualification; the runtime result above records the later saved
+empty-slot check. Both shipped gates stay off. The copied outdoor harness supports
+explicit `-GearApply`, with before/after saved inventory evidence for the observed
+empty-waist candidate. Its preparation does not constitute runtime acceptance.
+
+## Gear inspection operational check — 2026-10-06
+
+The copied outdoor fixture completed the authorized `gear?` check. The player's
+screenshot shows Testone's four slot alternatives: one empty-slot candidate,
+one unknown/incomplete comparison and two Keep results, with bounded score text.
+The player reported normal behavior and logged out. This accepts native delivery
+and basic diagnostic interpretation for the shown Warrior report; it does not
+establish every class response, every authority/gate transition, optimal rankings
+or a measured before/after inventory fingerprint.
+
+The harness exited zero, all four bots logged out, world/auth/test database stopped
+and MySQL recorded clean shutdown. No assertion/fatal match appeared; no combat or
+healing casts were required or observed by the harness's class counters. Evidence
+stays local in ignored `build/playerbot-smoke-20261006-092902/` in the core.
+The route remains read-only/default-off. Native equipment execution is not enabled.
+
+## Authorized read-only gear inspection — 2026-10-06
+
+Ordinary whispers and party/raid chat recognize only `gear`, `gear?` and `gear ?`.
+The existing server-origin lookup, full-control security and raid-subgroup routing
+remain authoritative. The world-thread chat handler never reads the inventory or
+decision engine; it reports copied map-owned data through the existing immutable
+session read model. No new session command hook or duplicate lifecycle registry
+was introduced. The legacy strategy-snapshot name/getter remains compatible.
+
+Gear publication uses the default-off starter-score gate, refreshes at most once
+per two seconds except identity/gate changes, and exposes no more than six rows.
+Replies require matching bot identity and a gear snapshot younger than five
+seconds; dead/transferring bots are unavailable. Disabled, not-ready and unsupported
+level/spec/state outcomes are explicit. Strategy STATE has a separate ready flag,
+so gear-only publication cannot masquerade as a valid empty strategy snapshot.
+The original strategy gate, one-second publication cadence and addon framing remain.
+Gear data cannot authorize equipment changes; inspection sends no equip request.
+
+Five new regressions cover fixed read-command boundaries, gated/rate-limited
+publication, expiry/timer wrap, bounded formatting/unknown scores and gear-only
+versus strategy readiness. Linux worldserver/tests-common passed 369/369; logs
+are in ignored `build/linux-gear-inspection-20261006/` in the core and the compiler
+is stopped. Windows worldserver/tests-common also built and passed 369/369. Source security/group routing is
+reviewed; Testone's native query delivery passed the subsequent check above.
+Full gate/authority transitions and measured inventory invariance remain unqualified.
+
+The local harness adds explicit `-GearInspection`, enabling only the copied
+configuration and skipping dungeon entry unless separately requested. Parser,
+existing wait-policy and environment-isolation checks passed without services.
+No combat, item grant or equipment mutation is required for this inspection.
+Startup retries caught missing retired-party normalization and premature safe
+placement in the new mode; both were corrected for copied offline fixture data.
+The placement ordering check passed. Failed setup copies shut down their test
+database cleanly; those failed setup attempts add no native query acceptance.
+The later successful replay is summarized above.
+
+## Read-only carried-gear comparison survey — 2026-10-05
+
+Donor `StatsWeightCalculator.cpp: CalculateItemTypePenalty`,
+`ItemUsageValue.cpp: QueryItemUsageForEquip` and the 1.1 default upgrade threshold
+from `PlayerbotAIConfig.cpp` at `037c01418b5d01506917a3db9b44fd56ac5f965c`
+supply this bounded survey. `starter equipment comparisons` uses the existing
+default-off starter-score gate and the same eight-spec/level-10–39 scope.
+
+Native carried candidates are re-resolved by identity and checked again for
+current ownership, carried location, class/spec/level snapshot and exact native
+CanEquipItem destination. Current occupied-slot metadata replaces cached data.
+Donor two-hand, Arms/Fury/Protection and caster weapon multipliers now feed the
+shared score reader, using native inventory type, dual-wield and Titan's Grip
+capability. Obsolete talent-aura bonuses and unsupported classes are not copied.
+No armor-type penalty is invented: the donor's general armor penalty is disabled,
+native usability still applies, and level-40 armor specialization remains outside
+the starter model. These are heuristics, not full slot-combination optimization.
+
+Owned affixes require matching signed identity, all five actual property-enchant
+slots and the native suffix factor before a local fact copy gains instance proof.
+The cached hypothetical facts remain unverified. Non-property instance enchants
+are still unsupported; sockets, sets, procs and incomplete scores stay Unknown.
+Handedness changes and coupled offhand displacement also stay Unknown, rather
+than treat a two-slot change as a single-slot upgrade.
+
+The read-only result distinguishes Keep, Upgrade, FillSlot, ReplaceBroken,
+NeedsRepair and Unknown. Healthy duplicate-entry replacement can repair a broken
+slot; normal same-entry swaps retain donor conservative behavior. Broken candidates
+are deferred for repair. The fixed donor 1.1 comparison default is used; no item
+is equipped, repaired, purchased or rolled for, and no recommendation is sent to chat.
+
+Five new regressions cover weapon preferences, caster hand penalties, coupled
+layouts, positive/empty/broken/same-entry decisions and incomplete comparisons.
+The existing affix test also checks that local instance proof cannot leak into
+cached hypothetical facts. Linux worldserver/tests-common passed 364/364; logs
+are in ignored `build/linux-equipment-survey-20261005/` in the core, and its
+compiler is stopped. Windows evidence subsequently confirmed worldserver linkage
+and all 364 tests passed. Native survey queries
+have not yet been exercised with a real inventory fixture.
+
+## Default-off starter gear score models — 2026-10-05
+
+Donor `StatsWeightCalculator.cpp: GenerateBasicWeights/GenerateAdditionalWeights`
+at `037c01418b5d01506917a3db9b44fd56ac5f965c` supplies the heuristic rows.
+Optional `Playerbots.Equipment.StarterScore.Enabled` defaults off; the read-only
+`starter item score::<item ID>[,<property ID>]` value covers level 10–39 Warrior
+Arms/Fury/Protection, Mage Arcane/Fire/Frost and Priest Holy/Discipline. Unknown
+trees/classes, Shadow Priest and levels outside the window remain unavailable.
+These are source-adapted starter heuristics, not optimal Cata or endgame weights.
+
+Donor base additions and the supported spec-specific rows are retained, except
+mastery, defense, armor penetration, block value/rating remain unmapped rather
+than inherit inappropriate Wrath coefficients. Native Cata
+`Unit::SpellBaseDamageBonusDone/SpellBaseHealingBonusDone` adds intellect above ten
+to spell power: caster/healer intellect weights include that extra power term
+(Mage 0.3+1, Priest 0.8+1). The reader rejects the non-linear low-intellect case.
+Mage spirit has explicit zero combat weight; no Wrath Molten Armor spirit bonus
+or old spell-rank adjustment is copied. Other coefficients remain donor heuristics,
+not newly measured marginal stat values; passives, caps and higher-level tuning
+are not claimed. The range ends before level-40 armor-specialization assumptions.
+
+The reader requires native usable weapon/armor templates, live same-level facts
+and the existing completeness/class/spec/profile checks. It cannot score mastery,
+unsupported legacy stats, unresolved affixes, procs/conditions or instance-level
+socket/set inputs. Wands and thrown weapons now use the native ranged inventory
+channel rather than the melee channel. No equip action, recommendation chat,
+purchase or loot vote consumes these scores; the gate is not enabled in a test realm.
+
+Six regressions cover all eight supported spec mappings, level bounds, donor base
+additions/spec differences, Cata intellect and omitted Mage spirit, unmapped stats,
+plain caster comparisons and ranged weapon channels. Linux worldserver/tests-common
+passed 359/359; logs are in ignored `build/linux-starter-gear-score-20261005/` in
+the core, and the compiler is stopped. The corresponding Windows build also
+passed 359/359. Native
+runtime score queries and gameplay usefulness remain unqualified.
+
+## Native equipment admission and guarded score/comparison mechanics — 2026-10-05
+
+Donor `ItemUsageValue.cpp: QueryItemUsageForEquip` calls native CanEquipItem
+before considering replacement; `StatsWeightCalculator.cpp: CalculateItem`
+accumulates stat weights, and the upgrade branch requires both a better score
+and the relative-improvement threshold. Pin:
+`037c01418b5d01506917a3db9b44fd56ac5f965c`.
+
+Read-only `equipment candidates` examines carried owned weapon/armor instances
+against every native equipment slot with CanEquipItem(swap=true,not_loading=true).
+Only successful exact-slot destinations enter a copied identity/slot snapshot.
+Native skill/class/level/unique/combat/cast/ownership checks remain authoritative;
+no temporary Item or equipment mutation is created. Bank/container upgrades and
+hypothetical unowned drops are outside this value. Existing/candidate durability
+and native affix identity/factor are copied, not Item pointers. Future execution
+must re-resolve/recheck; a dry run is not lasting authorization.
+
+The donor weighted sum and strict comparison are available as guarded mechanics.
+Models default unqualified and must match native class, primary tree, collector
+profile and level range. Unmapped nonzero stats are unknown, not zero-weight;
+intentional zero weights remain distinct. Nonfinite inputs and narrowing overflow
+reject. Partial effects/procs/use/conditions, unverified affixes and unresolved
+socket/set instance inputs cannot produce a score. Missing scores produce Unknown,
+not an upgrade/no-upgrade guess.
+
+No Wrath table is qualified as Cata. Tests use synthetic weights, not balancing
+recommendations. Cata coefficient mapping, item-type/weapon/armor preferences,
+proc valuation, actual gems/enchants, broken-item replacement and native execution
+remain separate work. No automatic score advice, equip action, purchase or vote
+is enabled. Five regressions cover model identity/level, unmapped versus explicit
+zero, incomplete evidence, numeric rejection and strict thresholds. Linux
+worldserver/tests-common passed 353/353 after the test included native talent-tree
+declarations. Logs: ignored `build/linux-equipment-boundary-20261005/` in the core;
+its compiler is stopped. The corresponding Windows build also passed 353/353. Native carried-item
+admission has compiled but has not been exercised in a client replay.
+
+## Random affix collection and socket/set score context — 2026-10-05
+
+Donor `StatsWeightCalculator.cpp: CalculateRandomProperty/CalculateSocketBonus/
+CalculateItemSetMod` at `037c01418b5d01506917a3db9b44fd56ac5f965c` supplies this
+bounded collection/context batch. Item-base queries accept `item ID,property ID`;
+positive IDs select property rows, negative IDs suffix rows, and omitted/zero IDs
+leave a random template unresolved. Bounded signed parsing and wide absolute-value
+conversion avoid overflow at the minimum signed integer.
+
+All five native affix slots are read. Suffix allocations use each slot's own
+percentage and deterministic native GenerateEnchSuffixFactor, with wide product
+arithmetic, native truncation and overflow rejection. This avoids the donor's
+inner search limited to the three enchant-effect slots, which can miss the fourth
+and fifth suffix allocations. Missing rows/enchants/factors remain explicit;
+unknown or conditional enchant effects retain their existing markers. A supplied
+affix remains pool/instance-unverified: this is read-only estimation, not proof
+that an item instance or drop can legally have that affix. No random affix is generated.
+
+Socket count/bonus identity and existing native equipped-set counts/maximum
+thresholds are copied into the snapshot. Donor heuristics are exposed separately:
+three percent per socket, five percent for a first set piece, ten percent per
+existing piece below the final threshold, otherwise no set multiplier. They do
+not activate gems, socket bonuses or set spells, nor claim a complete score.
+Missing set metadata and skill conditions remain explicit. Native pointers are
+borrowed only on the map update. No item, group, database or loot vote is changed.
+
+Five regressions cover query boundaries, signed identity safety, wide suffix
+allocation, bounded socket multipliers and set heuristic thresholds. Linux
+worldserver/tests-common passed 348/348; logs are in ignored
+`build/linux-item-affix-context-20261005/` in the core and the compiler is stopped.
+The corresponding Windows build also passed 348/348. Cata spec weights/native equip eligibility,
+proc/on-use valuation and instance-level socket/enchant context remain ahead.
+
+## Flat equipment effects and enchantment stats — 2026-10-05
+
+Donor `StatsCollector.cpp: HandleApplyAura/CollectEnchantStats/AverageValue` at
+`037c01418b5d01506917a3db9b44fd56ac5f965c` supplies the next collection layer.
+The existing item-base snapshot now includes supported generic flat on-equip
+auras; separate `enchant base stats::<enchant ID>` snapshots collect native
+enchantment stat entries and flat equip spells. These values do not apply effects.
+
+Primary/all-primary stats, role-filtered combat rating masks, mastery, attack power,
+healing power, generic spell damage, physical armor, block value and mana regen
+use the donor collection channels. Cata's scoped StatType and both native all-stat
+selectors replace the donor STAT constants. Native enchant Effect/EffectArg/
+EffectPointsMin replace Wrath type/spellid/amount fields. Zero suffix-allocation
+amounts remain unresolved rather than fabricate an affix bonus.
+
+Generic flat spell amounts use deterministic native CalcBaseValue plus the donor
+die-range mean and native per-level adjustment. Cata scaling variance has zero
+mean and takes precedence over dice, matching native CalcValue's branch order;
+no random roll or live effect modifier is invoked for this read-only snapshot.
+Procs, triggered spells, on-use uptime, family/form/aura/stack conditions and
+resource/mastery/target-level-sensitive formulas are explicitly deferred.
+Skill/level/condition-restricted enchants remain conditional, not equip permission.
+Unsupported auras/rating bits stay flagged rather than silently become zero.
+Random affixes, socket activation, item sets, spec weights and native equipment
+eligibility remain separate dependencies; no vote/purchase/equipment change occurs.
+
+Five regressions cover all-stat selectors, typed rating masks/mastery, donor
+role/school semantics, deterministic averages and unsupported effects. Linux
+worldserver/tests-common built and passed 343/343 after the native StatType
+adaptation. Logs are in ignored `build/linux-item-flat-effects-20261005/` in the
+core and the compiler container is stopped. The corrected Windows build also
+passed worldserver/tests-common and all 343 tests.
+
+## Item base-stat collection foundation — 2026-10-05
+
+Donor `src/Mgr/Item/StatsCollector.cpp: CollectItemStats/CollectByItemStatType`
+and `StatsCollector.h` at `037c01418b5d01506917a3db9b44fd56ac5f965c` provide
+the collection structure for equipment scoring. The read-only
+`item base stats::<item ID>` value preserves donor profile precedence, typed
+hit/crit/haste filtering, additive stat collection, health/mana normalization and
+spell-power/heal-power channels. Cata mastery is appended as its own channel;
+extra armor joins armor rather than a removed Wrath stat.
+
+Native Cata ItemTemplate stat values, scaling-distribution stat IDs, effective
+armor and weapon damage tables replace Wrath raw ItemStat/Armor/Damage fields.
+Signed stat conversion follows native Player::_ApplyItemBonuses. Lookups are
+bounded and nullable, and snapshots retain no Item/Player pointers. Unsupported
+stats and the presence of item effects, random properties, sockets and item sets
+are explicit. This collects base facts, not a complete score: enchant/proc effects,
+socket evaluation, random affixes, feral conversions and set bonuses still need
+their owning donor layers. Available does not grant native equip permission.
+
+The scoring audit found donor Wrath armor-penetration/defense weights, old talent
+spell IDs, role-specific overflow rules and item-set/socket/random-property
+dependencies. Do not copy those weights blindly to Cata or substitute item level
+alone for a spec-aware upgrade decision. No equipment mutation, inventory/database
+write, loot vote or class-admission change is enabled by this collector.
+
+Four regressions cover profile precedence, resource/stat accumulation, typed
+ratings/ranged attack power and distinct mastery/unsupported input. Linux
+worldserver/tests-common built and passed 338/338 tests after correcting the
+native empty-socket sentinel; logs are local in ignored
+`build/linux-item-base-stats-20261005/`. The corrected Windows build subsequently
+passed worldserver/tests-common and all 338 tests as well.
+
+## Consumable item-usage stock foundation — 2026-10-05
+
+Donor `src/Ai/Base/Value/ItemUsageValue.cpp: Calculate/GetConsumableType/
+CurrentStacks/BetterStacks` at `037c01418b5d01506917a3db9b44fd56ac5f965c`
+provides the supply policy: fewer than two current-plus-better stacks means USE,
+two to fewer than three means KEEP, and two better stacks suppress further stock
+requests. The new read-only `consumable usage::<item ID>` value ports that branch.
+It does not claim full donor `item usage`: unsupported equipment, quests, skills,
+trade and disenchant decisions remain explicitly Unsupported, not NONE.
+
+Cata metadata uses ItemEffect/SpellInfo rather than Wrath's fixed item spells.
+Food/drink reuse the existing item-category fallback; potion/flask recovery effects
+preserve donor effect order, restricted to actual mana energize for mana supplies.
+Mana eligibility uses maximum capacity, so temporarily empty mana does not change
+the item's use category. Only usable carried stock of matching class/subclass/type
+and equal-or-higher item level contributes as better stock. Item identities are
+aggregated once: unlike the donor per-stack traversal, split carried stacks cannot
+multiply the same item's total. Bank/equipment stock is excluded. Native usability,
+unique maximum counts and stack sizes remain authoritative; no Item pointer is
+cached and no inventory, database, purchase, loot vote or item-use action changes.
+
+Four regressions cover bounded item qualifiers, category/mana eligibility, exact
+two/three-stack thresholds and unsupported/unusable/max-stock states. Windows and
+Linux worldserver/tests-common built and passed 334/334 tests. Linux logs are in ignored `build/linux-consumable-usage-20261005/` in
+the core; its compiler container is stopped. New source files required explicit
+CMake regeneration before linking on both platforms. The donor pin still matches
+GitHub master when checked during this slice. This is a prerequisite for future loot/item decisions,
+not automatic need/greed or an equipment-upgrade implementation.
+
+## Coordination replay — 2026-10-05
+
+The copied mixed-party Ragefire replay completed all four bot arrivals in instance
+1. Logs record 10 Testtwo and 6 Botmage active DPS reassessments, 13 Testone party
+aggro recoveries, 25 Mage accepted damage casts and 19 Priest accepted healing
+casts. The player reported normal behavior. No assertion/fatal match appeared;
+the harness exited zero, world/auth/test database stopped, and MySQL recorded
+clean shutdown. Evidence stays local in the core's ignored
+`build/playerbot-smoke-20261005-163042/`.
+
+This qualifies ordinary party operation and active DPS reassessment, not explicit
+attack preservation, cast-boundary timing, detailed facing or multi-tank retention.
+The fixture has one Protection tank and an Arms damage Warrior. No resurrection,
+rest cycle, addon aggregate ACK/restore or full-clear acceptance is added by this
+session. Those observations remain deferred, not prerequisites to each new slice.
+
+## Active DPS target reassessment — 2026-10-05
+
+Donor `src/Ai/Base/Strategy/DpsAssistStrategy.cpp: InitTriggers` and
+`src/Ai/Base/Trigger/GenericTriggers.cpp: NotDpsTargetActiveTrigger::IsActive`
+at `037c01418b5d01506917a3db9b44fd56ac5f965c` adopt a non-null DPS target when
+it differs from the current target, rather than waiting for the current enemy
+to die. The existing Cata donor-ranked DPS selector was previously used only
+for initial fallback acquisition; active damage bots did not reassess it.
+
+The map-thread companion adapter now reassesses at its existing one-second
+action cadence for engine-enabled Mage and damage Warrior auto-assists. Explicit
+attack commands, tanks/main-tank assignees and native non-melee casts are left
+alone. Priest support remains on its healing cadence. Fresh GUID resolution,
+party engagement, crowd-control exclusions, range/LOS and native attack checks
+remain mandatory; this does not admit autonomous pulls. A successful switch
+cancels obsolete queued actions through the existing attack transition. Missing
+or unchanged candidates leave the active attack untouched. The donor enemy-player
+exception is outside this creature-only companion scope; no PvP admission changes.
+
+Two regressions cover reassessment authority/role/cast gates and missing/unchanged
+candidate behavior. Windows and Linux worldserver/tests-common builds passed all
+330 registered tests. Linux used the existing Ubuntu 22.04/GCC 11.4 Release
+normal-PCH source snapshot; logs are in the core's ignored
+`build/linux-dps-reassessment-20261005/`. The compiler container is stopped.
+Native multi-enemy reassessment remains pending and can join the next dungeon
+replay. Local/uncommitted.
+
+## Main-tank resolution and coordinated aggro guards — 2026-10-05
+
+Donor `src/Bot/PlayerbotAI.cpp: GetMainTankGuid/IsMainTank` at
+`037c01418b5d01506917a3db9b44fd56ac5f965c` first honors explicit native group
+assignment, then selects the first living role-recognized tank. The Cata resolver
+preserves first-assignment and first-fallback order, including an unavailable
+explicit assignee: death/disconnect does not silently reassign the group role.
+Unassigned fallback uses only living, in-world, non-transferring same-map members,
+matching this companion adapter's local party scope. Selection carries GUIDs,
+not retained group/player pointers, and is rebuilt on native map updates.
+
+Existing tank-target icon/aggro classification and auto-assisted rescue now honor
+recognized tank roles or the main-tank assignment. Automatic Warrior taunts use
+the same guard, closing their earlier mismatch with rescue switching. A human
+main tank whose current spec is not recognized therefore remains protected from
+automatic aggro theft. Class/spec masks, threat percentage denominator and class
+admission are unchanged: assignment is not a new rotation or tank-spec override.
+
+This retains the companion adapter's conservative no-steal rule for every tank.
+It does not copy donor `HasAggro`'s permission for an explicit main tank to reclaim
+another tank's aggro; encounter-specific handoffs and explicit taunt commands are
+separate work. Target admission, crowd-control exclusions and native cast checks
+remain authoritative. No group flags, database rows or thread ownership change.
+
+Two additional selection regressions cover explicit/unavailable precedence,
+empty identities, fallback ordering and fresh snapshots. Final Windows and Linux
+worldserver/tests-common builds passed all 328 registered tests. Linux reused
+Ubuntu 22.04/GCC 11.4 Release with normal PCH; logs are in the core's ignored
+`build/linux-main-tank-resolution-20261005/`. An initial isolated-test link failure
+was corrected by testing the identity-templated selection policy with plain
+identities while the server retains native GUIDs, without adding game-library
+dependencies to policy tests. The compiler container is stopped. Native multi-tank
+play remains pending; this batch is local/uncommitted.
+
+## Explicit main-tank target retention — 2026-10-05
+
+Donor `src/Bot/PlayerbotAI.cpp: IsExplicitMainTank/GetGroupTankNum` and
+`src/Ai/Base/Value/TankTargetValue.cpp: FindTankTargetSmartStrategy::IsBetter`
+at `037c01418b5d01506917a3db9b44fd56ac5f965c` distinguish explicit main-tank
+assignment from role inference. In a multi-tank group, smart ranking retains
+the explicit main tank's current target before applying aggro/range/threat bands.
+
+The Cata port reads native group member flags on the map update and preserves
+the donor first-assigned-slot rule. Living tank count uses the existing strategy/
+spec role classifier, restricted to in-world, non-transferring members on the
+bot's map. Remote/offline tanks therefore cannot activate local target retention.
+Assignment alone does not fabricate a tank spec, new bot class admission or
+spell capability. No group, Player or Creature pointer is retained.
+
+Only candidates admitted by the existing engaged-party, range/LOS, crowd-control
+and native attack checks can be retained. Existing raid-icon fast-path precedence
+remains ahead of smart ranking, as in the donor. With no eligible current target,
+one tank, or no explicit assignment, original ranking remains unchanged. The
+session's auto-assisted rescue uses this value without changing its no-pull,
+explicit-command or other-tank protections.
+
+Two regressions cover assignment/count boundaries, current-target precedence,
+stable ties and unchanged fallback ranking. Windows and Linux worldserver/
+tests-common built and passed all 326 registered tests. Linux reused Ubuntu
+22.04/GCC 11.4 Release with normal PCH and a refreshed native source snapshot;
+logs are local in ignored `build/linux-main-tank-20261005/` in the core tree.
+The compiler container stopped after validation. Native multi-tank behavior
+remains pending. This is a new local slice,
+not part of the published 324-test coordination/recovery milestone.
+
 ## Coordination/recovery operational check — 2026-10-05
 
 The copied level-20 Ragefire party session completed with player-confirmed

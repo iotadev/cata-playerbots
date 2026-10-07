@@ -39,41 +39,42 @@ travel, group formation and full dungeon/class parity remain future work.
 
 ## Validation
 
-The current Windows and Linux development trees build worldserver and pass all
-324 registered tests. Linux uses Ubuntu 22.04/GCC 11.4 with normal PCH enabled.
-The core also passed a Windows build with both optional modules disabled and
-19 core checks at the preceding milestone.
-A separate GCC 13.3 protocol/group-policy check passed 30 cases and 4,380
-assertions. Builds validated the milestone source before its final documentation
-and commit. The later healer conservation, melee positioning and recovery metadata
-slices passed on both platforms as an uncommitted source snapshot. Linux server
-runtime has not been validated.
+The published coordination/recovery milestone passed 324 tests on Windows and
+Linux. The local gear/loot milestone follows that baseline and remains unpublished.
+Current qualification is:
 
-The 2026-10-04 outdoor party check observed all four bots engaging, role actions,
-Mage damage, Priest Renew casts, return to noncombat and native corpse opening.
-Client strategy queries showed group loot removal on all four bots. The realm
-shut down cleanly. The quick encounter did not qualify sustained tank/healer
-coordination. Aggregate addon ACK timing, framed state refresh, restoration and
-the newer optional features still need observations in later party sessions.
+| Source scope | Build result |
+| --- | --- |
+| Current local Windows source, including native party rolls | worldserver/tests-common built; 384/384 tests passed |
+| Current local Linux source, including native party rolls | worldserver/tests-common built; 384/384 tests passed |
+| Current Windows build with both optional modules disabled | worldserver/tests-common built; 19 core tests passed |
 
-The corrected 2026-10-05 Ragefire check confirmed dedicated entry for all four
-bots into the same instance. The player reported working behavior over several
-trash pulls; logs recorded Warrior role actions, Mage damage casts, Priest Renew,
-return to noncombat and native corpse opening. All disposable services stopped
-cleanly with no assertion found. This is a basic operational party milestone;
-full clears, sustained healing/recovery and the optional timing checks remain open.
+Linux builds use Ubuntu 22.04/GCC 11.4 with normal PCH; Linux server runtime remains untested.
+[PORTING.md](PORTING.md) records intermediate builds, donor revisions and adaptations.
 
-A longer October 5 Ragefire session observed eating/drinking, Mage/Priest drink
-starts, repeated healing and tank aggro recovery, plus owner-death holding and
-follow resumption after recovery. Services shut down cleanly. This accepts basic
-recovery operation; it does not establish quantitative mana savings, detailed
-tank orientation, Priest resurrection or a full dungeon clear.
+Outdoor and Ragefire checks observed four-bot engagement, Warrior role actions,
+Mage damage, Priest healing, tank aggro recovery, native corpse opening and
+eating/drinking. All four completed dedicated entry into the party's Ragefire
+instance. A later session observed DPS target reassessment and tank rescue.
+These checks establish basic party operation; full clears, detailed positioning,
+multi-tank behavior and quantitative healer mana savings remain open.
+MultiBot group ACK/STATE/restore timing also needs a bundled runtime observation.
 
-The Lua 5.1 communication mock covers the installed Cata addon reader accepting
-an ACK while pending and rejecting a late ACK after its timer expires.
-[PORTING.md](PORTING.md) records donor revisions, Cata adaptations and dated
-validation. The [archived README](docs/README_HISTORY_2026-10-04.md) preserves
-earlier batch notes; it is historical context, not the current feature list.
+With the starter-score gate enabled, authorized `gear?` reports a bounded recent
+survey. Testone's report was observed. Explicit `gear apply` additionally requires
+the default-off StarterEquip gate; one empty-waist move passed native completion
+and saved inventory preservation. Relogin and occupied-slot displacement remain
+untested. The level-10–39 scoring model is a limited donor-derived heuristic.
+
+Shared item-usage and non-affixed template comparisons retain explicit source
+scope and unknown inputs. An optional native need/greed/pass adapter now connects
+their roll-choice rules locally, with its
+gate off. Windows validation and one controlled native decision/award check passed:
+Testone needed, Testtwo greeded, casters passed, and the saved award was verified.
+Broader runtime coverage remains pending. Automatic equipping, purchases and
+disenchant classification remain ahead.
+Template comparison does not establish the identity or eligibility of an actual
+loot roll. The voting adapter additionally binds and rechecks native roll facts.
 
 ## Build and configuration
 

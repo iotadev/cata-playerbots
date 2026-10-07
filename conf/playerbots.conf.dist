@@ -253,3 +253,23 @@ Playerbots.StrategyControl.GroupMutations = 0
 # exceptions. Estimates are scheduling hints; native Cata spells still heal.
 # Optional until qualified under sustained party pressure. Default: disabled.
 Playerbots.Healing.SaveMana.Enabled = 0
+
+# Read-only experimental donor-derived gear score for level 10-39 Warrior,
+# Mage and Holy/Discipline Priest. Cata intellect contribution is included;
+# mastery/legacy tank ratings and incomplete item inputs stay unavailable.
+# Not an optimal/BiS model. Does not equip gear, purchase items or roll on loot.
+Playerbots.Equipment.StarterScore.Enabled = 0
+
+# Explicit gear apply command: at most one safe native inventory change while idle.
+# Requires StarterScore. No automatic gear loop, purchases, bags or loot votes.
+Playerbots.Equipment.StarterEquip.Enabled = 0
+
+# Optional native party rolls for supported non-affixed starter gear/consumables.
+# Requires StarterScore; PassOnGroupLoot must be disabled. Unknown items pass.
+# No automatic equipping, recipe/token/profession/disenchant classification.
+Playerbots.Loot.Rolls.Enabled = 0
+
+# Disposable role fixture only: preserve the Protection bot's chest in a bag
+# and leave its slot empty for a deterministic native loot-need check.
+# Requires Dev.Enabled and Dev.Fixture20.Enabled. Never normal provisioning.
+Playerbots.Dev.LootRollFixture.Enabled = 0

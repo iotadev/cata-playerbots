@@ -11,6 +11,8 @@
 #include "../Ai/Base/PlayerbotMount.h"
 #include "../Ai/Base/PlayerbotPosition.h"
 #include "../Ai/Base/PlayerbotLootPolicy.h"
+#include "../Ai/Base/PlayerbotEquipmentApply.h"
+#include "../Ai/Base/PlayerbotLootRoll.h"
 #include "Engine.h"
 #include "StateEngines.h"
 #include "../Ai/Base/PlayerbotCombatMovement.h"
@@ -29,6 +31,7 @@ public:
     void RequestServerOriginCease() override;
     void RequestServerOriginInstanceJoin(uint32 mapId) override;
     bool RequestPlayerbotRange(uint32 requesterGuidLow, std::string const& param) override;
+    bool RequestPlayerbotEquip(uint32 requesterGuidLow) override;
     bool RequestPlayerbotStrategy(uint32 requesterGuidLow, std::string const& command,
         std::string const& token, std::string const& target, uint64 batch, PlayerbotStrategyBinding const& binding) override;
     bool RequestPlayerbotRebuff(uint32 requesterGuidLow) override;
@@ -64,6 +67,9 @@ private:
     PlayerbotAI _ai;
     PlayerbotLoot::PassPreference _lootPassPreference;
     PlayerbotCombatMovement::RangeMailbox _rangeCommands;
+    PlayerbotEquipmentApply::Mailbox _equipCommands;
+    PlayerbotRoll::Mailbox _rollCommands;
+    uint32 _rollPollTime = 0; // world-owned polling timestamp
     PlayerbotStrategyControl::Mailbox _strategyCommands;
     bool _noncombatDefaultsInitialized = false; // map-owned; overrides last until logout or gate disable
     bool _combatDefaultsInitialized = false; // shared utility overrides, not role/spec defaults

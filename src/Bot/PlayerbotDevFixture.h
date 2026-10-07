@@ -7,6 +7,7 @@ namespace PlayerbotDevFixture
 {
 enum class Role { Protection, Arms, Frost, Holy };
 void SetEnabled(bool enabled);
+void SetRollFixtureEnabled(bool enabled);
 bool Request(ObjectGuid guid, Role role);
 void Process(Player& bot); // map-thread only; consumes one bounded request
 }

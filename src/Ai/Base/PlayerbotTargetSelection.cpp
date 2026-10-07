@@ -20,7 +20,7 @@ bool ImplementedTank(Player const* player)
 }
 bool ImplementedNonTank(Player const* player)
 {
-    return player && !ImplementedTank(player);
+    return player && !PlayerbotRoles::IsTankOrMainTank(*player);
 }
 class TargetGuidValue final : public CalculatedValue<ObjectGuid>
 {
@@ -153,6 +153,8 @@ static ObjectGuid SelectTarget(PlayerbotAI& ai, Engine const& engine, bool tank)
     bool casterRanking = estimated && nearCount > 3 && PlayerbotRoles::IsRanged(*bot);
     ObjectGuid skull = group ? group->GetTargetIcon(7) : ObjectGuid::Empty;
     Creature* current = ai.GetCurrentTarget();
+    bool retainTankTarget = tank && RetainMainTankTarget(PlayerbotRoles::IsExplicitMainTank(*bot),
+        PlayerbotRoles::GroupTankCount(*bot));
     Candidate best{};
     TankCandidate tankBest{};
     ObjectGuid result;
@@ -165,9 +167,10 @@ static ObjectGuid SelectTarget(PlayerbotAI& ai, Engine const& engine, bool tank)
         {
             Unit* victim = target->GetVictim();
             TankCandidate next{distance, target->GetThreatManager().GetThreat(bot),
-                HasTankAggro(victim != nullptr, victim == bot, ImplementedTank(victim ? victim->ToPlayer() : nullptr)),
-                bot->IsWithinMeleeRange(target)};
-            if (result.IsEmpty() || BetterTank(next, tankBest)) { tankBest = next; result = guid; }
+                HasTankAggro(victim != nullptr, victim == bot, victim && victim->ToPlayer() &&
+                    PlayerbotRoles::IsTankOrMainTank(*victim->ToPlayer())),
+                bot->IsWithinMeleeRange(target), current && current->GetGUID() == guid};
+            if (result.IsEmpty() || BetterTank(next, tankBest, retainTankTarget)) { tankBest = next; result = guid; }
             continue;
         }
         bool ranged = PlayerbotRoles::IsRanged(*bot);

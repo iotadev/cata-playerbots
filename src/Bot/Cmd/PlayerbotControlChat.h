@@ -49,6 +49,11 @@ inline bool ExtractPlayerbotRangeChat(std::string const& command, std::string& p
     param = command.substr(6);
     return true;
 }
+inline bool IsPlayerbotGearInspection(std::string const& command)
+{
+    return command == "gear" || command == "gear?" || command == "gear ?";
+}
+inline bool IsPlayerbotGearApply(std::string const& command) { return command == "gear apply"; }
 
 // Group chat routing must not broaden /party into the rest of a raid.
 inline bool PlayerbotControlChatReaches(bool raidChat, uint8 senderSubgroup, uint8 botSubgroup)

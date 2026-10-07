@@ -67,12 +67,24 @@ inline bool Better(Candidate const& next, Candidate const& old, bool casterRanki
     return next.Lifetime > old.Lifetime;
 }
 inline bool ValidEstimate(float value) { return std::isfinite(value) && value > 0.0f; }
+// Donor NotDpsTargetActiveTrigger reassesses a live target. The companion
+// adapter preserves explicit commands and does not interrupt a native cast.
+inline bool ShouldReassessDpsTarget(bool autoAssisted, bool supportedDamageRole,
+    bool tankOrMainTank, bool casting)
+{
+    return autoAssisted && supportedDamageRole && !tankOrMainTank && !casting;
+}
+inline bool DpsTargetChanged(bool candidateAvailable, bool sameTarget)
+{
+    return candidateAvailable && !sameTarget;
+}
 struct TankCandidate
 {
     float Distance;
     float Threat;
     bool HasAggro;
     bool InMelee;
+    bool Current = false;
 };
 inline bool HasTankAggro(bool hasVictim, bool victimIsBot, bool victimIsOtherTank)
 {
@@ -89,8 +101,19 @@ inline int TankBand(TankCandidate const& candidate)
 {
     return !candidate.HasAggro ? 2 : (candidate.InMelee ? 1 : 0);
 }
-inline bool BetterTank(TankCandidate const& next, TankCandidate const& old)
+inline bool RetainMainTankTarget(bool explicitMainTank, unsigned livingTanks)
 {
+    return explicitMainTank && livingTanks > 1;
+}
+inline bool BetterTank(TankCandidate const& next, TankCandidate const& old, bool retainCurrent = false)
+{
+    // Donor smart tank ranking pins the explicit main tank to its current
+    // target in multi-tank groups. Only already eligible candidates reach here.
+    if (retainCurrent)
+    {
+        if (old.Current) return false;
+        if (next.Current) return true;
+    }
     int nextBand = TankBand(next), oldBand = TankBand(old);
     if (nextBand != oldBand) return nextBand > oldBand;
     return nextBand == 2 ? next.Distance < old.Distance : next.Threat < old.Threat;

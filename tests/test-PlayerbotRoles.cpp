@@ -3,6 +3,34 @@
 #include <catch2/catch.hpp>
 using namespace PlayerbotRoles;
 
+TEST_CASE("Playerbot main tank selection preserves explicit assignment over living fallback", "[playerbot][roles]")
+{
+    uint64 tank = 10, assigned = 20;
+    MainTankSelection<uint64> selection;
+    REQUIRE(selection.Get() == 0);
+    selection.Observe(0, true, true);
+    REQUIRE(selection.Get() == 0);
+    selection.Observe(tank, false, true);
+    REQUIRE(selection.Get() == tank);
+    selection.Observe(assigned, true, false); // offline/dead/non-tank assignee still owns assignment
+    REQUIRE(selection.Get() == assigned);
+    selection.Observe(tank, true, true); // first explicit slot wins
+    REQUIRE(selection.Get() == assigned);
+}
+TEST_CASE("Playerbot main tank fallback follows first eligible tank and resets per snapshot", "[playerbot][roles]")
+{
+    uint64 first = 10, second = 20;
+    MainTankSelection<uint64> selection;
+    selection.Observe(first, false, false);
+    REQUIRE(selection.Get() == 0);
+    selection.Observe(second, false, true);
+    selection.Observe(first, false, true);
+    REQUIRE(selection.Get() == second);
+    MainTankSelection<uint64> refreshed;
+    refreshed.Observe(first, false, true);
+    REQUIRE(refreshed.Get() == first);
+}
+
 TEST_CASE("Cata tank roles follow native trees and bear form", "[playerbot][roles]")
 {
     REQUIRE(SpecMask(CLASS_WARRIOR, TALENT_TREE_WARRIOR_PROTECTION) & STRATEGY_TYPE_TANK);

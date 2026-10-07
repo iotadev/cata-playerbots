@@ -2,6 +2,7 @@
 #include "PlayerbotDevFixture.h"
 #include "DBCStores.h"
 #include "Item.h"
+#include "ObjectMgr.h"
 #include "Log.h"
 #include "Player.h"
 #include "SpellMgr.h"
@@ -19,6 +20,7 @@ namespace
 struct RequestData { Role role; uint32 timestamp; };
 std::mutex mutex;
 bool enabled = false;
+bool rollFixtureEnabled = false;
 std::map<ObjectGuid, RequestData> pending;
 
 bool Equip(Player& bot, uint8 slot, uint32 entry)
@@ -66,9 +68,15 @@ bool Request(ObjectGuid guid, Role role)
     pending.emplace(guid, RequestData{role, getMSTime()});
     return true;
 }
+void SetRollFixtureEnabled(bool value)
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    rollFixtureEnabled = value;
+}
 void Process(Player& bot)
 {
     Role role;
+    bool prepareRoll = false;
     {
         std::lock_guard<std::mutex> lock(mutex);
         auto found = pending.find(bot.GetGUID());
@@ -77,6 +85,7 @@ void Process(Player& bot)
         pending.erase(found);
         if (getMSTime() - request.timestamp > 5000) return;
         role = request.role;
+        prepareRoll = rollFixtureEnabled;
     }
     uint8 playerClass = role == Role::Frost ? CLASS_MAGE : role == Role::Holy ? CLASS_PRIEST : CLASS_WARRIOR;
     uint8 tab = role == Role::Arms ? 0 : role == Role::Holy ? 1 : 2;
@@ -134,6 +143,25 @@ void Process(Player& bot)
         ready = Equip(bot, EQUIPMENT_SLOT_MAINHAND, 1405) && ready;
         ready = Equip(bot, EQUIPMENT_SLOT_CHEST, 2585) && ready;
         ready = Carry(bot, 1205, 20) && ready;
+    }
+    if (prepareRoll && role == Role::Protection)
+    {
+        Item* chest = bot.GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_CHEST);
+        ItemTemplate const* drop = sObjectMgr->GetItemTemplate(2866);
+        ItemPosCountVec stored;
+        if (!chest || chest->GetEntry() != 2866 || !drop || drop->GetQuality() < ITEM_QUALITY_UNCOMMON ||
+            drop->GetRandomProperty() || drop->GetRandomSuffix() ||
+            bot.CanStoreItem(NULL_BAG, NULL_SLOT, stored, chest) != EQUIP_ERR_OK)
+            ready = false;
+        else
+        {
+            ObjectGuid preserved = chest->GetGUID();
+            bot.RemoveItem(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_CHEST, true);
+            bot.StoreItem(stored, chest, true);
+            ready = !bot.GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_CHEST) &&
+                bot.GetItemByGuid(preserved) == chest && ready;
+            TC_LOG_INFO("server", "PB-FIXTURE: %s controlled roll chest empty; existing item 2866 preserved", bot.GetName().c_str());
+        }
     }
     ready = Carry(bot, 3770, 20) && ready;
     bot.SaveToDB();

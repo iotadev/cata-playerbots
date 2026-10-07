@@ -3,6 +3,7 @@
  * Released under GNU GPL v2 or any later version.
  */
 #include "PlayerbotSessionBehavior.h"
+#include "../Ai/Base/PlayerbotEquipmentInspection.h"
 #include "Cmd/PlayerbotAddonMutation.h"
 #include "Cmd/PlayerbotStrategyCompletions.h"
 #include "PlayerbotDevFixture.h"
@@ -37,6 +38,7 @@
 #include "PlayerbotWarriorStrategy.h"
 #include "World.h"
 #include "WorldPacket.h"
+#include "../Ai/Base/PlayerbotItemUsage.h"
 #include "WarriorAiObjectContext.h"
 #include "Timer.h"
 namespace
@@ -145,6 +147,85 @@ void PlayerbotSessionBehavior::UpdateMap(uint32 diff)
     }
     UpdateServerOriginMovement(diff);
     UpdateServerOriginInstanceJoin();
+    // Armor admission/cast locks are temporary. Leave the copied request queued
+    // until idle; expiry and world retry handle longer fights within native roll lifetime.
+    if (Player* actor = _ai.GetBot(); actor && actor->IsInWorld() && actor->IsAlive() &&
+        !actor->IsInCombat() && !actor->IsNonMeleeSpellCast(false) && !actor->IsBeingTeleported())
+    if (auto request = _rollCommands.Take())
+    {
+        Player* bot = _ai.GetBot();
+        Player* controller = bot && bot->IsInWorld() ? bot->GetMap()->GetPlayer(
+            ObjectGuid::Create<HighGuid::Player>(request->Controller)) : nullptr;
+        bool attached = request->Controller == _serverOriginFollowTargetGuidLow.load() ||
+            request->Controller == _serverOriginPartyControllerGuidLow.load();
+        uint8 choice = ROLL_PASS;
+        if (PlayerbotModuleLootRollEnabled() && PlayerbotRoll::Fresh(*request, getMSTime()) &&
+            bot && bot->IsAlive() && bot->IsInWorld() && !bot->IsBeingTeleported() && _aiContext &&
+            bot->GetMapId() == request->Identity.Map && bot->GetInstanceId() == request->Identity.Instance &&
+            attached && controller && controller->GetSession() && !controller->GetSession()->IsServerOrigin() &&
+            !controller->IsBeingTeleported() && PlayerbotSecurity(*bot).CheckLevelFor(PLAYERBOT_SECURITY_ALLOW_ALL, *controller))
+        {
+            ItemTemplate const* item = sObjectMgr->GetItemTemplate(request->Identity.Entry);
+            using namespace PlayerbotItemUsage;
+            Fact fact;
+            Kind kind = Kind::Other;
+            if (item && !request->Identity.Property && !request->Identity.SuffixFactor)
+            {
+                std::string query = std::to_string(request->Identity.Entry);
+                if (item->GetClass() == ITEM_CLASS_WEAPON || item->GetClass() == ITEM_CLASS_ARMOR)
+                {
+                    kind = Kind::Equipment;
+                    if (auto* value = _aiContext->GetValue<Fact>("template item usage", query))
+                    {
+                        if (auto* survey = _aiContext->GetValue<PlayerbotEquipment::Survey>("template equipment comparisons", query)) survey->Reset();
+                        value->Reset(); fact = value->Get();
+                        if (fact.Source != Scope::TemplateEquipment) fact = {};
+                    }
+                }
+                else if (item->GetClass() == ITEM_CLASS_CONSUMABLE)
+                    if (auto* value = _aiContext->GetValue<Fact>("item usage", query))
+                    {
+                        if (auto* stock = _aiContext->GetValue<PlayerbotConsumable::Usage>("consumable usage", query)) stock->Reset();
+                        value->Reset(); fact = value->Get();
+                        if (fact.Source != Scope::ConsumableStock) fact = {};
+                    }
+                if (auto vote = ChooseRoll(fact.Result, kind, {2, true, false, false}, true, false, false))
+                    choice = uint8(*vote);
+            }
+        }
+        // Unknown/unsupported or invalid map eligibility falls back to pass;
+        // world execution still rechecks the live identity/controller and mask.
+        if (!PlayerbotLootRoll::Admits(true, request->Identity.Mask, choice)) choice = ROLL_PASS;
+        _rollCommands.Complete(*request, choice, getMSTime());
+    }
+    if (auto request = _equipCommands.Take())
+    {
+        Player* bot = _ai.GetBot();
+        Player* requester = bot && bot->IsInWorld() ? bot->GetMap()->GetPlayer(ObjectGuid::Create<HighGuid::Player>(request->Requester)) : nullptr;
+        bool attached = request->Requester == _serverOriginFollowTargetGuidLow.load() ||
+            request->Requester == _serverOriginPartyControllerGuidLow.load();
+        auto result = PlayerbotEquipmentApply::Result::Unavailable;
+        if (bot && requester && requester->GetSession() && !requester->GetSession()->IsServerOrigin() &&
+            attached && PlayerbotEquipmentApply::Fresh(*request, getMSTime()) &&
+            PlayerbotModuleStarterEquipEnabled() && PlayerbotModuleStarterGearScoreEnabled() &&
+            requester->IsAlive() && !requester->IsBeingTeleported() && !requester->IsInCombat() &&
+            !_engineTransferSuspended && !_serverOriginAttacking.load() && !_ai.GetRestSpellId() &&
+            !_ai.LootRequests().Pending() && !_ai.LootPursuit().Active() &&
+            !PlayerbotTargetSelection::HasNearbyPartyCombat(*bot, *requester) &&
+            PlayerbotSecurity(*bot).CheckLevelFor(PLAYERBOT_SECURITY_ALLOW_ALL, *requester))
+            result = PlayerbotEquipmentApply::ApplyOne(_session, _ai);
+        _equipCommands.Finish(request->Serial);
+        if (result == PlayerbotEquipmentApply::Result::Confirmed)
+        {
+            if (_stateEngines) _stateEngines->CancelPendingActions();
+            std::atomic_store(&_strategySnapshot, std::shared_ptr<PlayerbotStrategySnapshot const>{});
+        }
+        if (requester && requester->GetSession())
+            ChatHandler(requester->GetSession()).PSendSysMessage("Playerbot %s: gear apply %s.", bot->GetName().c_str(),
+                result == PlayerbotEquipmentApply::Result::Confirmed ? "confirmed one native slot change" :
+                result == PlayerbotEquipmentApply::Result::NoChange ? "found no qualified safe change" : "rejected; authority, state or inventory was not eligible");
+        if (bot) TC_LOG_INFO("server", "PB-EQUIP: %s result=%u", bot->GetName().c_str(), uint32(result));
+    }
     if (auto request = _strategyCommands.Take(getMSTime()))
     {
         Player* bot = _ai.GetBot();
@@ -291,16 +372,22 @@ void PlayerbotSessionBehavior::UpdateMap(uint32 diff)
     UpdateDeferredReadyCheck();
     Player* snapshotBot = _ai.GetBot();
     Player* snapshotController = _ai.GetController();
-    if (PlayerbotModuleStrategyControlEnabled() && _stateEngines && !_engineTransferSuspended &&
+    bool strategyReadEnabled = PlayerbotModuleStrategyControlEnabled();
+    bool gearReadEnabled = PlayerbotModuleStarterGearScoreEnabled();
+    if ((strategyReadEnabled || gearReadEnabled) && _stateEngines && !_engineTransferSuspended &&
         snapshotBot && snapshotBot->IsInWorld() && !snapshotBot->IsBeingTeleported())
     {
         uint32 botGuid = snapshotBot->GetGUID().GetCounter();
         uint32 controllerGuid = snapshotController ? snapshotController->GetGUID().GetCounter() : 0;
         uint32 created = getMSTime();
-        auto combat = _stateEngines->Get(StateEngines::State::Combat).GetStrategies();
-        auto noncombat = _stateEngines->Get(StateEngines::State::NonCombat).GetStrategies();
+        auto combat = strategyReadEnabled ? _stateEngines->Get(StateEngines::State::Combat).GetStrategies() : std::vector<std::string>{};
+        auto noncombat = strategyReadEnabled ? _stateEngines->Get(StateEngines::State::NonCombat).GetStrategies() : std::vector<std::string>{};
         auto prior = GetStrategySnapshot();
-        if (!prior || prior->Bot != botGuid || prior->Controller != controllerGuid ||
+        bool sameIdentity = prior && prior->Bot == botGuid && prior->Controller == controllerGuid;
+        bool gearDue = PlayerbotEquipmentInspection::Due(gearReadEnabled, prior && prior->EquipmentEnabled,
+            sameIdentity, created, prior ? prior->EquipmentCreated : 0);
+        if (!prior || !sameIdentity || gearDue || prior->StrategiesReady != strategyReadEnabled ||
+            prior->EquipmentEnabled != gearReadEnabled ||
             prior->Combat != combat || prior->NonCombat != noncombat || uint32(created - prior->Created) >= 1000)
         {
             auto snapshot = std::make_shared<PlayerbotStrategySnapshot>();
@@ -309,6 +396,30 @@ void PlayerbotSessionBehavior::UpdateMap(uint32 diff)
             snapshot->Created = created;
             snapshot->Combat = std::move(combat);
             snapshot->NonCombat = std::move(noncombat);
+            snapshot->StrategiesReady = strategyReadEnabled;
+            snapshot->EquipmentEnabled = gearReadEnabled;
+            if (gearReadEnabled)
+            {
+                if (gearDue)
+                {
+                    snapshot->EquipmentCreated = created;
+                    auto* value = _aiContext ? _aiContext->GetValue<PlayerbotEquipment::Survey>("starter equipment comparisons") : nullptr;
+                    auto survey = value ? value->Get() : PlayerbotEquipment::Survey{};
+                    snapshot->EquipmentAvailable = survey.Available && survey.Owner == snapshotBot->GetGUID();
+                    if (snapshot->EquipmentAvailable)
+                    {
+                        snapshot->EquipmentTotal = uint32(survey.Items.size());
+                        snapshot->EquipmentRows = PlayerbotEquipmentInspection::Rows(survey);
+                    }
+                }
+                else if (prior)
+                {
+                    snapshot->EquipmentCreated = prior->EquipmentCreated;
+                    snapshot->EquipmentAvailable = prior->EquipmentAvailable;
+                    snapshot->EquipmentTotal = prior->EquipmentTotal;
+                    snapshot->EquipmentRows = prior->EquipmentRows;
+                }
+            }
             std::atomic_store(&_strategySnapshot, std::shared_ptr<PlayerbotStrategySnapshot const>(std::move(snapshot)));
         }
     }
@@ -465,6 +576,36 @@ void PlayerbotSessionBehavior::SelectEngineState()
 }
 void PlayerbotSessionBehavior::UpdateWorld()
 {
+    if (!PlayerbotModuleLootRollEnabled()) _rollCommands.Cancel();
+    else
+    {
+        Player* bot = _session.GetPlayer();
+        Group* group = bot ? bot->GetGroup() : nullptr;
+        auto attached = [&](uint32 controller)
+        {
+            return group && controller && group->IsMember(ObjectGuid::Create<HighGuid::Player>(controller)) &&
+                (controller == _serverOriginPartyControllerGuidLow.load() || controller == _serverOriginFollowTargetGuidLow.load());
+        };
+        if (auto reply = _rollCommands.Consume(getMSTime()))
+            if (bot && bot->IsInWorld() && !bot->IsBeingTeleported() && attached(reply->Original.Controller) &&
+                group->ValidatePlayerbotLootVote(*bot, reply->Original.Identity, reply->Choice))
+            {
+                WorldPacket packet(CMSG_LOOT_ROLL, 13);
+                packet << ObjectGuid(reply->Original.Identity.Roll) << uint32(reply->Original.Identity.Slot) << reply->Choice;
+                _session.HandleLootRoll(packet);
+                TC_LOG_INFO("server", "PB-ROLL: %s submitted native vote %u for item %u roll %llu", bot->GetName().c_str(),
+                    uint32(reply->Choice), reply->Original.Identity.Entry, static_cast<unsigned long long>(reply->Original.Identity.Roll));
+            }
+        uint32 now = getMSTime();
+        uint32 controller = _serverOriginPartyControllerGuidLow.load();
+        if (!controller) controller = _serverOriginFollowTargetGuidLow.load();
+        if (bot && bot->IsInWorld() && !bot->IsBeingTeleported() && attached(controller) && uint32(now - _rollPollTime) >= 1000)
+        {
+            _rollPollTime = now;
+            PlayerbotLootRoll roll;
+            if (group->GetPlayerbotPendingLootRoll(*bot, roll)) _rollCommands.Post(roll, controller, now);
+        }
+    }
     auto validCheck = [&](PlayerbotReadyCheck::Request const& request)
     {
         Player* bot = _session.GetPlayer();
@@ -583,6 +724,11 @@ void PlayerbotSessionBehavior::RequestServerOriginInstanceJoin(uint32 mapId)
 bool PlayerbotSessionBehavior::RequestPlayerbotRange(uint32 requesterGuidLow, std::string const& param)
 {
     return _rangeCommands.Post(requesterGuidLow, param, getMSTime());
+}
+bool PlayerbotSessionBehavior::RequestPlayerbotEquip(uint32 requesterGuidLow)
+{
+    return PlayerbotModuleStarterGearScoreEnabled() && PlayerbotModuleStarterEquipEnabled() &&
+        _equipCommands.Post(requesterGuidLow, getMSTime());
 }
 bool PlayerbotSessionBehavior::RequestPlayerbotStrategy(uint32 requesterGuidLow, std::string const& command,
     std::string const& token, std::string const& target, uint64 batch, PlayerbotStrategyBinding const& binding)
@@ -1238,6 +1384,30 @@ void PlayerbotSessionBehavior::UpdateServerOriginCombat(uint32 diff)
         }
         _serverOriginActionCheckTimer = 1000;
 
+        bool supportedDamageRole =
+            (_player->getClass() == CLASS_MAGE && PlayerbotModuleEngineMageCombatEnabled()) ||
+            (_player->getClass() == CLASS_WARRIOR && PlayerbotModuleEngineWarriorCombatEnabled());
+        if (_engine && PlayerbotTargetSelection::ShouldReassessDpsTarget(
+            _serverOriginAutoAssistedAttack, supportedDamageRole,
+            PlayerbotRoles::IsTankOrMainTank(*_player), _player->IsNonMeleeSpellCast(false)))
+        {
+            // Donor DpsAssistStrategy / NotDpsTargetActiveTrigger: adopt the
+            // newly ranked target rather than waiting for the old one to die.
+            // Resolve fresh on the map thread; admission still forbids new pulls.
+            ObjectGuid candidateGuid = PlayerbotTargetSelection::SelectDpsTarget(_ai, *_engine);
+            Creature* candidate = candidateGuid.IsEmpty() ? nullptr : ObjectAccessor::GetCreature(*_player, candidateGuid);
+            if (PlayerbotTargetSelection::DpsTargetChanged(candidate != nullptr, candidate == target) &&
+                validTarget(owner, candidate) && PlayerbotTargetSelection::IsEngagedWithAttachedParty(*_player, *owner, *candidate))
+            {
+                if (!beginAttack(candidate, true))
+                    return; // Native Attack rejected the replacement after cease.
+                target = candidate;
+                _serverOriginActionCheckTimer = 1000;
+                TC_LOG_INFO("server", "PB-ROLE: %s reassessed DPS target to %s",
+                    _player->GetName().c_str(), target->GetName().c_str());
+            }
+        }
+
         if (_engine && PlayerbotModuleEngineWarriorCombatEnabled() &&
             _player->getClass() == CLASS_WARRIOR &&
             PlayerbotRoles::IsTank(*_player) &&
@@ -1251,7 +1421,7 @@ void PlayerbotSessionBehavior::UpdateServerOriginCombat(uint32 diff)
             Player* victim = candidate && candidate->GetVictim() ? candidate->GetVictim()->ToPlayer() : nullptr;
             bool partyVictim = victim && (victim == owner || victim == _player ||
                 (_player->GetGroup() && victim->GetGroup() == _player->GetGroup()));
-            bool otherTank = victim && PlayerbotRoles::IsTank(*victim);
+            bool otherTank = victim && PlayerbotRoles::IsTankOrMainTank(*victim);
             if (PlayerbotTargetSelection::ShouldProtectPartyMember(_serverOriginAutoAssistedAttack,
                 candidate && candidate != target, partyVictim, victim == _player, otherTank) &&
                 validTarget(owner, candidate) && PlayerbotTargetSelection::IsEngagedWithAttachedParty(*_player, *owner, *candidate))

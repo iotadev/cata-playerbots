@@ -248,7 +248,7 @@ bool HandlePlayerbotAddonMessage(Player& sender, std::string const& prefix, std:
                 auto snapshot = session ? session->GetPlayerbotStrategySnapshot() : nullptr;
                 // Roster reauthorizes this request. Snapshot identity and freshness
                 // prevent exposing another controller's or an old session's state.
-                if (!bot || bot->IsBeingTeleported() || !snapshot ||
+                  if (!bot || bot->IsBeingTeleported() || !snapshot ||
                     !PlayerbotAddonProtocol::SnapshotFresh(*snapshot, entry.Guid.GetCounter(),
                         sender.CanBeGameMaster() ? snapshot->Controller : sender.GetGUID().GetCounter(), getMSTime()))
                 { failed = true; break; }

@@ -4,6 +4,25 @@
 #include <limits>
 using PlayerbotTargetSelection::Candidate;
 
+TEST_CASE("Playerbot DPS reassessment preserves explicit commands casts and tank assignments", "[playerbot][target]")
+{
+    using PlayerbotTargetSelection::ShouldReassessDpsTarget;
+    REQUIRE(ShouldReassessDpsTarget(true, true, false, false));
+    REQUIRE_FALSE(ShouldReassessDpsTarget(false, true, false, false));
+    REQUIRE_FALSE(ShouldReassessDpsTarget(true, false, false, false));
+    REQUIRE_FALSE(ShouldReassessDpsTarget(true, true, true, false));
+    REQUIRE_FALSE(ShouldReassessDpsTarget(true, true, false, true));
+}
+
+TEST_CASE("Playerbot DPS reassessment requires a different available candidate", "[playerbot][target]")
+{
+    using PlayerbotTargetSelection::DpsTargetChanged;
+    REQUIRE(DpsTargetChanged(true, false));
+    REQUIRE_FALSE(DpsTargetChanged(true, true));
+    REQUIRE_FALSE(DpsTargetChanged(false, false));
+    REQUIRE_FALSE(DpsTargetChanged(false, true));
+}
+
 TEST_CASE("Playerbot target control protection is shared and clears with native control", "[playerbot][target]")
 {
     using PlayerbotTargetSelection::CrowdControlAllows;
@@ -31,6 +50,32 @@ TEST_CASE("Playerbot fallback routes unassigned DPS Warriors without pretending 
     REQUIRE(FallbackValue(CLASS_ROGUE, 0, true, true, true) == nullptr);
 }
 
+TEST_CASE("Playerbot main tank retention requires explicit assignment and multiple living tanks", "[playerbot][target]")
+{
+    using PlayerbotTargetSelection::RetainMainTankTarget;
+    REQUIRE_FALSE(RetainMainTankTarget(false, 0));
+    REQUIRE_FALSE(RetainMainTankTarget(false, 2));
+    REQUIRE_FALSE(RetainMainTankTarget(true, 0));
+    REQUIRE_FALSE(RetainMainTankTarget(true, 1));
+    REQUIRE(RetainMainTankTarget(true, 2));
+    REQUIRE(RetainMainTankTarget(true, 5));
+}
+TEST_CASE("Playerbot explicit multi tank ranking retains current without changing fallback bands", "[playerbot][target]")
+{
+    using PlayerbotTargetSelection::TankCandidate;
+    using PlayerbotTargetSelection::BetterTank;
+    TankCandidate current{15, 100, true, false, true};
+    TankCandidate lost{2, 0, false, true, false};
+    REQUIRE_FALSE(BetterTank(lost, current, true));
+    REQUIRE(BetterTank(current, lost, true));
+    REQUIRE_FALSE(BetterTank(current, current, true));
+    REQUIRE(BetterTank(lost, current, false));
+    REQUIRE_FALSE(BetterTank(current, lost, false));
+    TankCandidate owned{2, 5, true, true, false};
+    REQUIRE(BetterTank(lost, owned, true));
+    REQUIRE_FALSE(BetterTank(owned, lost, true));
+    REQUIRE_FALSE(BetterTank(owned, owned, true));
+}
 TEST_CASE("Playerbot tank target bands prioritize lost aggro before melee and distant owned targets", "[playerbot][target]")
 {
     using PlayerbotTargetSelection::TankBand;

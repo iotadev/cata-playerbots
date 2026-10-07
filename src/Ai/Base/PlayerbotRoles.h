@@ -52,7 +52,26 @@ inline uint32 SpecMask(uint8 playerClass, uint32 tree, uint8 form = FORM_NONE)
 inline uint32 ChooseMask(uint32 strategyMask, uint32 specMask)
 { return strategyMask ? strategyMask & RoleFlags : specMask; }
 uint32 Mask(Player const& player, bool bySpec = false);
+// Native group assignment is separate from class/spec/strategy role inference.
+// Map-thread only; no group or player pointer is retained.
+bool IsExplicitMainTank(Player const& player);
+uint32 GroupTankCount(Player const& player);
+template <typename Identity>
+struct MainTankSelection
+{
+    Identity Assigned{}, Fallback{};
+    void Observe(Identity guid, bool assigned, bool eligibleTank)
+    {
+        if (guid == Identity{}) return;
+        if (assigned && Assigned == Identity{}) Assigned = guid;
+        if (eligibleTank && Fallback == Identity{}) Fallback = guid;
+    }
+    Identity Get() const { return Assigned == Identity{} ? Fallback : Assigned; }
+};
+ObjectGuid MainTankGuid(Player const& player);
+bool IsMainTank(Player const& player);
 inline bool IsTank(Player const& player) { return (Mask(player) & STRATEGY_TYPE_TANK) != 0; }
+inline bool IsTankOrMainTank(Player const& player) { return IsTank(player) || IsMainTank(player); }
 inline bool IsHealer(Player const& player) { return (Mask(player) & STRATEGY_TYPE_HEAL) != 0; }
 inline bool IsRanged(Player const& player) { return (Mask(player) & STRATEGY_TYPE_RANGED) != 0; }
 }

@@ -101,6 +101,7 @@ TEST_CASE("Playerbot strategy snapshots reject wrong identity stale data and sur
     using namespace PlayerbotAddonProtocol;
     PlayerbotStrategySnapshot snapshot;
     snapshot.Bot = 1; snapshot.Controller = 2; snapshot.Created = 100;
+    snapshot.StrategiesReady = true;
     REQUIRE(SnapshotFresh(snapshot, 1, 2, 5099));
     REQUIRE_FALSE(SnapshotFresh(snapshot, 1, 2, 5100));
     REQUIRE_FALSE(SnapshotFresh(snapshot, 3, 2, 101));
