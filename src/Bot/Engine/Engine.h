@@ -8,6 +8,7 @@
 
 #include "AiObjectContext.h"
 #include "Multiplier.h"
+#include "ActionTrace.h"
 #include "Strategy/Strategy.h"
 #include "../../Script/WorldThr/Queue.h"
 #include <cstdint>
@@ -76,6 +77,7 @@ public:
     void AddActionExecutionListener(std::unique_ptr<ActionExecutionListener> listener);
     std::string const& GetLastAction() const { return lastAction; }
     uint32_t QueuedCount() const { return queue.Size(); }
+    void SetTraceObserver(std::function<void(ActionTraceRecord)> observer) { traceObserver = std::move(observer); }
 
 private:
     void Reset();
@@ -86,6 +88,8 @@ private:
     ActionNode* CreateActionNode(std::string const& name);
     Action* InitializeAction(ActionNode* node);
     bool ListenAndExecute(Action* action, Event event);
+    void Trace(std::string const& action, char const* kind, char const* reason, bool called = false,
+        std::optional<bool> actionReturn = {}, std::optional<bool> engineResult = {}) noexcept;
 
     AiObjectContext& context;
     Queue queue;
@@ -97,6 +101,7 @@ private:
     uint32_t strategyTypeMask = 0;
     bool hasTargetExclusions = false;
     std::string lastAction;
+    std::function<void(ActionTraceRecord)> traceObserver;
 };
 
 #endif

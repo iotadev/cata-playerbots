@@ -4,6 +4,7 @@
  * Released under GNU GPL v2 or any later version.
  */
 #include "PlayerbotCorpseLoot.h"
+#include "PlayerbotQuestItem.h"
 #include "PlayerbotTargetSelection.h"
 #include "../../Bot/PlayerbotAI.h"
 #include "../../Bot/Engine/Value/Value.h"
@@ -16,6 +17,7 @@
 #include "MotionMaster.h"
 #include "PlayerbotCombatMovement.h"
 #include "ObjectAccessor.h"
+#include "ObjectMgr.h"
 #include "Player.h"
 #include "Timer.h"
 #include "WorldSession.h"
@@ -227,6 +229,24 @@ void PlayerbotCorpseLoot::ProcessWorld(WorldSession& session, Mailbox& mailbox, 
                         continue;
                     if (bot->GetLootGUID() != request->Corpse)
                         break;
+                    ItemTemplate const* proto = sObjectMgr->GetItemTemplate(item.Loot.ItemID);
+                    bool perPlayerCopy = false;
+                    if (PlayerbotModuleQuestLootPriorityEnabled() && proto && proto->GetClass() == ITEM_CLASS_QUEST)
+                    {
+                        // Resolve this viewer's native slot, including quest-slot mapping.
+                        // freeforall is per-player consumption, not the group loot method.
+                        Creature* corpse = ObjectAccessor::GetCreature(*bot, request->Corpse);
+                        LootItem const* nativeItem = corpse ? corpse->loot.LootItemInSlot(item.LootListID, bot) : nullptr;
+                        perPlayerCopy = nativeItem && nativeItem->itemid == item.Loot.ItemID && nativeItem->freeforall;
+                    }
+                    if (PlayerbotModuleQuestLootPriorityEnabled() && proto && proto->GetClass() == ITEM_CLASS_QUEST &&
+                        owner->GetSession() && !owner->GetSession()->IsServerOrigin() &&
+                        PlayerbotQuestItem::DeferCorpseQuestItem(true, true, owner->HasQuestForItem(item.Loot.ItemID), perPlayerCopy))
+                    {
+                        TC_LOG_INFO("module.playerbots", "PB-QUEST-LOOT: %s deferred quest item %u needed by %s; native ownership unchanged",
+                            bot->GetName().c_str(), item.Loot.ItemID, owner->GetName().c_str());
+                        continue;
+                    }
                     WorldPacket store(CMSG_AUTOSTORE_LOOT_ITEM, 1);
                     store << uint8(item.LootListID);
                     session.HandleAutostoreLootItemOpcode(store);

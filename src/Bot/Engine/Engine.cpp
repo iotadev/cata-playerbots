@@ -9,6 +9,14 @@
 #include <algorithm>
 #include <unordered_map>
 
+void Engine::Trace(std::string const& name, char const* kind, char const* reason, bool called,
+    std::optional<bool> actionReturn, std::optional<bool> engineResult) noexcept
+{
+    if (!traceObserver) return;
+    try { traceObserver({getMSTime(), name, kind, reason, called, actionReturn, engineResult}); }
+    catch (...) { /* Diagnostics cannot change the action result or scheduling. */ }
+}
+
 void Engine::AddActionExecutionListener(std::unique_ptr<ActionExecutionListener> listener)
 {
     if (listener)
@@ -17,6 +25,10 @@ void Engine::AddActionExecutionListener(std::unique_ptr<ActionExecutionListener>
 
 bool Engine::ListenAndExecute(Action* action, Event event)
 {
+    std::string traceName = traceObserver ? action->getName() : std::string{};
+    bool called = false;
+    std::optional<bool> actionReturn;
+    char const* reason = "before_listener_veto";
     bool before = true;
     for (auto const& listener : listeners)
         before &= listener->Before(action, event);
@@ -26,12 +38,20 @@ bool Engine::ListenAndExecute(Action* action, Event event)
         bool allowed = true;
         for (auto const& listener : listeners)
             allowed &= listener->AllowExecution(action, event);
-        executed = allowed ? action->Execute(event) : true;
+        if (allowed)
+        {
+            called = true;
+            executed = action->Execute(event);
+            actionReturn = executed;
+            reason = executed ? "action_returned_true" : "action_returned_false";
+        }
+        else { executed = true; reason = "execution_listener_suppressed"; }
     }
     for (auto const& listener : listeners)
         executed = listener->OverrideResult(action, executed, event);
     for (auto const& listener : listeners)
         listener->After(action, executed, event);
+    Trace(traceName, "execution", reason, called, actionReturn, executed);
     return executed;
 }
 
@@ -291,8 +311,16 @@ bool Engine::Tick(bool minimal, bool forceRebuffPending, bool inCombat, uint32_t
         Event event = basket->getEvent();
         std::unique_ptr<ActionNode> node(queue.Pop());
         Action* action = InitializeAction(node.get());
-        if (!action || !action->isUseful())
+        if (!action)
+        {
+            if (traceObserver) Trace(node->getName(), "rejected", "unknown_action");
             continue;
+        }
+        if (!action->isUseful())
+        {
+            if (traceObserver) Trace(action->getName(), "rejected", "not_useful");
+            continue;
+        }
 
         for (Multiplier* multiplier : multipliers)
         {
@@ -301,12 +329,17 @@ bool Engine::Tick(bool minimal, bool forceRebuffPending, bool inCombat, uint32_t
                 break;
         }
         action->setRelevance(relevance);
-        if (relevance > 0 && action->isPossible())
+        if (!(relevance > 0))
+        {
+            if (traceObserver) Trace(action->getName(), "rejected", "relevance_not_positive");
+        }
+        else if (action->isPossible())
         {
             if (!skipPrerequisites && MultiplyAndPush(node->getPrerequisites(), relevance + 0.002f, false, event))
             {
                 MultiplyAndPush({NextAction(node->getName(), relevance + 0.001f)},
                                 relevance + 0.001f, true, event);
+                if (traceObserver) Trace(action->getName(), "deferred", "prerequisite_queued");
                 continue;
             }
             if (ListenAndExecute(action, event))
@@ -317,6 +350,7 @@ bool Engine::Tick(bool minimal, bool forceRebuffPending, bool inCombat, uint32_t
                 return true;
             }
         }
+        else if (traceObserver) Trace(action->getName(), "rejected", "not_possible");
         MultiplyAndPush(node->getAlternatives(), relevance + 0.003f, false, event);
     }
     queue.RemoveExpired();
@@ -328,11 +362,20 @@ ActionResult Engine::ExecuteAction(std::string const& name, Event event)
     std::unique_ptr<ActionNode> node(CreateActionNode(name));
     Action* action = InitializeAction(node.get());
     if (!action)
+    {
+        if (traceObserver) Trace(name, "rejected", "unknown_action");
         return ACTION_RESULT_UNKNOWN;
+    }
     if (!action->isUseful())
+    {
+        if (traceObserver) Trace(action->getName(), "rejected", "not_useful");
         return ACTION_RESULT_USELESS;
+    }
     if (!action->isPossible())
+    {
+        if (traceObserver) Trace(action->getName(), "rejected", "not_possible");
         return ACTION_RESULT_IMPOSSIBLE;
+    }
     action->MakeVerbose();
     bool executed = ListenAndExecute(action, event);
     if (executed)

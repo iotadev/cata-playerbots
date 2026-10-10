@@ -13,12 +13,19 @@ enum class Usage : uint8
     Quest = 5, Skill = 6, Use = 7, GuildTask = 8, Disenchant = 9,
     Auction = 10, Keep = 11, Vendor = 12, Ammo = 13, Unknown = 255
 };
-enum class Scope : uint8 { Unavailable, ConsumableStock, CarriedEquipment, TemplateEquipment };
+enum class Scope : uint8 { Unavailable, ConsumableStock, CarriedEquipment, TemplateEquipment, NativeLootEquipment, QuestLog };
 struct Fact
 {
     Usage Result = Usage::Unknown;
     Scope Source = Scope::Unavailable;
 };
+inline Fact ConsumableQuestFallback(Fact stock, bool questUseful)
+{
+    // The donor returns useful stock first, but an exhausted/unsupported stock
+    // branch continues to the quest predicate rather than suppressing it.
+    if (!questUseful || (stock.Result != Usage::None && stock.Result != Usage::Unknown)) return stock;
+    return {Usage::Quest, Scope::QuestLog};
+}
 inline Usage Consumable(PlayerbotConsumable::Usage usage)
 {
     switch (usage)

@@ -61,6 +61,27 @@ bool PlayerbotModuleSupportsClass(uint8 playerClass)
 {
     return playerClass == CLASS_WARRIOR || playerClass == CLASS_MAGE || playerClass == CLASS_PRIEST;
 }
+PlayerbotContextState PlayerbotSessionBehavior::GetContextStateForMap() const
+{
+    PlayerbotContextState result;
+    result.ActionHistory = _actionHistory.Read(getMSTime());
+    if (!_stateEngines || !_engine || _engineTransferSuspended)
+        return result;
+    result.Available = true;
+    result.Staying = _ai.IsStaying();
+    switch (_stateEngines->Current())
+    {
+        case StateEngines::State::NonCombat: result.EngineState = "noncombat"; break;
+        case StateEngines::State::Combat: result.EngineState = "combat"; break;
+        case StateEngines::State::Dead: result.EngineState = "dead"; break;
+    }
+    result.LastExecutedAction = _engine->GetLastAction();
+    result.QueuedCount = _engine->QueuedCount();
+    result.CombatStrategies = _stateEngines->Get(StateEngines::State::Combat).GetStrategies();
+    result.NonCombatStrategies = _stateEngines->Get(StateEngines::State::NonCombat).GetStrategies();
+    return result;
+}
+
 void PlayerbotSessionBehavior::UpdateMap(uint32 diff)
 {
     std::string strategyAck;
@@ -105,6 +126,20 @@ void PlayerbotSessionBehavior::UpdateMap(uint32 diff)
                 _engine->AddStrategy("nc");
                 _engine->AddStrategy("buff");
             }
+
+    if (_stateEngines && (!_traceObserversInstalled || _actionHistory.Enabled() != PlayerbotModuleActionHistoryEnabled()))
+    {
+        bool enabled = PlayerbotModuleActionHistoryEnabled();
+        _actionHistory.Enable(enabled);
+        for (auto const& [state, name] : std::array<std::pair<StateEngines::State, char const*>, 3>{{
+            {StateEngines::State::NonCombat, "noncombat"}, {StateEngines::State::Combat, "combat"}, {StateEngines::State::Dead, "dead"}}})
+        {
+            std::function<void(ActionTraceRecord)> observer;
+            if (enabled) observer = [this, name](ActionTraceRecord record) { _actionHistory.Record(name, std::move(record)); };
+            _stateEngines->Get(state).SetTraceObserver(std::move(observer));
+        }
+        _traceObserversInstalled = true;
+    }
 
     if (_engine)
         if (Player* bot = _ai.GetBot())
@@ -169,20 +204,19 @@ void PlayerbotSessionBehavior::UpdateMap(uint32 diff)
             using namespace PlayerbotItemUsage;
             Fact fact;
             Kind kind = Kind::Other;
-            if (item && !request->Identity.Property && !request->Identity.SuffixFactor)
+            if (item)
             {
                 std::string query = std::to_string(request->Identity.Entry);
                 if (item->GetClass() == ITEM_CLASS_WEAPON || item->GetClass() == ITEM_CLASS_ARMOR)
                 {
                     kind = Kind::Equipment;
-                    if (auto* value = _aiContext->GetValue<Fact>("template item usage", query))
-                    {
-                        if (auto* survey = _aiContext->GetValue<PlayerbotEquipment::Survey>("template equipment comparisons", query)) survey->Reset();
-                        value->Reset(); fact = value->Get();
-                        if (fact.Source != Scope::TemplateEquipment) fact = {};
-                    }
+                    auto survey = PlayerbotEquipment::CompareLoot(_ai, request->Identity);
+                    if (survey.Available && survey.Owner == bot->GetGUID() && !survey.Items.empty())
+                        fact = {SurveyUsage(survey, request->Identity.Entry, survey.Items.front().Input.Property),
+                            Scope::NativeLootEquipment};
                 }
-                else if (item->GetClass() == ITEM_CLASS_CONSUMABLE)
+                else if (item->GetClass() == ITEM_CLASS_CONSUMABLE &&
+                    !request->Identity.Property && !request->Identity.SuffixFactor)
                     if (auto* value = _aiContext->GetValue<Fact>("item usage", query))
                     {
                         if (auto* stock = _aiContext->GetValue<PlayerbotConsumable::Usage>("consumable usage", query)) stock->Reset();
@@ -576,6 +610,8 @@ void PlayerbotSessionBehavior::SelectEngineState()
 }
 void PlayerbotSessionBehavior::UpdateWorld()
 {
+    PlayerbotQuestAccept::Update(_session, _questAcceptCommands);
+    PlayerbotQuestShare::Update(_session, _questShareAttempt);
     if (!PlayerbotModuleLootRollEnabled()) _rollCommands.Cancel();
     else
     {
@@ -729,6 +765,16 @@ bool PlayerbotSessionBehavior::RequestPlayerbotEquip(uint32 requesterGuidLow)
 {
     return PlayerbotModuleStarterGearScoreEnabled() && PlayerbotModuleStarterEquipEnabled() &&
         _equipCommands.Post(requesterGuidLow, getMSTime());
+}
+bool PlayerbotSessionBehavior::RequestPlayerbotQuestCommand(uint32 requesterGuidLow, uint32 quest, uint64 giver, uint32 map, uint32 instance, uint32 operation, uint32 item)
+{
+    auto action = static_cast<PlayerbotQuestAccept::Operation>(operation);
+    bool enabled = (action == PlayerbotQuestAccept::Operation::Accept || action == PlayerbotQuestAccept::Operation::AcceptAll) ? PlayerbotModuleQuestAcceptEnabled() :
+        (action == PlayerbotQuestAccept::Operation::Reward || action == PlayerbotQuestAccept::Operation::RewardAll) ? PlayerbotModuleQuestRewardEnabled() :
+        PlayerbotQuestAccept::IsInspection(action) ? PlayerbotModuleQuestInspectionEnabled() :
+        action == PlayerbotQuestAccept::Operation::Share ? PlayerbotModuleQuestSendShareEnabled() :
+        action == PlayerbotQuestAccept::Operation::Abandon && PlayerbotModuleQuestAbandonEnabled();
+    return enabled && _questAcceptCommands.Post(requesterGuidLow, quest, giver, map, instance, getMSTime(), action, item);
 }
 bool PlayerbotSessionBehavior::RequestPlayerbotStrategy(uint32 requesterGuidLow, std::string const& command,
     std::string const& token, std::string const& target, uint64 batch, PlayerbotStrategyBinding const& binding)

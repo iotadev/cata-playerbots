@@ -80,6 +80,7 @@ struct BaseStats
     bool UnsupportedEffects = false, HasProcEffects = false, HasUseEffects = false, HasConditionalEffects = false;
     bool AffixSupplied = false, AffixResolved = false, AffixPoolUnverified = false;
     bool AffixInstanceVerified = false;
+    bool AffixLootVerified = false; // Local copied fact, backed by native pending-roll metadata.
     bool SetMetadataKnown = false;
     uint32 SocketCount = 0, SocketBonus = 0, EquippedSetPieces = 0, MaximumSetThreshold = 0;
     float SocketHeuristic = 1.0f, SetHeuristic = 1.0f; // Donor score multipliers, never active bonuses.

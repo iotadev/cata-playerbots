@@ -1,7 +1,67 @@
 /* GPL v2 or later. See AUTHORS.md and PORTING.md. */
 #include "../src/Ai/Base/PlayerbotItemUsage.h"
+#include "../src/Ai/Base/PlayerbotQuestItem.h"
 #include <catch2/catch.hpp>
 using namespace PlayerbotItemUsage;
+TEST_CASE("Playerbot per player quest drops do not defer an independent native pickup", "[playerbot][quest][loot]")
+{
+    using PlayerbotQuestItem::DeferCorpseQuestItem;
+    REQUIRE_FALSE(DeferCorpseQuestItem(true, true, true, true));
+    REQUIRE(DeferCorpseQuestItem(true, true, true, false));
+    REQUIRE_FALSE(DeferCorpseQuestItem(false, true, true, false));
+    REQUIRE_FALSE(DeferCorpseQuestItem(true, true, false, false));
+}
+TEST_CASE("Playerbot master quest corpse priority is opt in and native need scoped", "[playerbot][quest][loot]")
+{
+    using PlayerbotQuestItem::DeferCorpseQuestItem;
+    REQUIRE(DeferCorpseQuestItem(true, true, true));
+    REQUIRE_FALSE(DeferCorpseQuestItem(false, true, true));
+    REQUIRE_FALSE(DeferCorpseQuestItem(true, false, true));
+    REQUIRE_FALSE(DeferCorpseQuestItem(true, true, false));
+}
+TEST_CASE("Playerbot quest corpse deferral ends when native human need is satisfied", "[playerbot][quest][loot]")
+{
+    using PlayerbotQuestItem::DeferCorpseQuestItem;
+    REQUIRE(DeferCorpseQuestItem(true, true, true));
+    REQUIRE_FALSE(DeferCorpseQuestItem(true, true, false));
+    // Bot inventory/admission facts do not reserve the human's item or erase need.
+    REQUIRE(DeferCorpseQuestItem(true, true, true));
+}
+TEST_CASE("Playerbot quest item usefulness requires an outstanding matching objective", "[playerbot][inventory][quest]")
+{
+    using PlayerbotQuestItem::Outstanding;
+    REQUIRE(Outstanding(100, 3, 100, 0));
+    REQUIRE(Outstanding(100, 3, 100, 2));
+    REQUIRE_FALSE(Outstanding(100, 3, 100, 3));
+    REQUIRE_FALSE(Outstanding(100, 3, 100, 4));
+    REQUIRE_FALSE(Outstanding(100, 3, 101, 0));
+    REQUIRE_FALSE(Outstanding(0, 3, 0, 0));
+    REQUIRE_FALSE(Outstanding(100, 0, 100, 0));
+}
+TEST_CASE("Playerbot quest usefulness alone never authorizes a group roll", "[playerbot][loot][quest]")
+{
+    Fact fact{Usage::Quest, Scope::QuestLog};
+    REQUIRE(fact.Source != Scope::NativeLootEquipment);
+    REQUIRE(ChooseRoll(fact.Result, Kind::Other, {2, true, false, false}, true, false, false) == Vote::Pass);
+}
+TEST_CASE("Playerbot consumable quest fallback preserves useful stock precedence", "[playerbot][inventory][quest]")
+{
+    for (auto usage : {Usage::Use, Usage::Keep})
+    {
+        auto fact = ConsumableQuestFallback({usage, Scope::ConsumableStock}, true);
+        REQUIRE(fact.Result == usage);
+        REQUIRE(fact.Source == Scope::ConsumableStock);
+    }
+    for (auto usage : {Usage::None, Usage::Unknown})
+    {
+        auto needed = ConsumableQuestFallback({usage, Scope::ConsumableStock}, true);
+        REQUIRE(needed.Result == Usage::Quest);
+        REQUIRE(needed.Source == Scope::QuestLog);
+        auto unneeded = ConsumableQuestFallback({usage, Scope::ConsumableStock}, false);
+        REQUIRE(unneeded.Result == usage);
+        REQUIRE(unneeded.Source == Scope::ConsumableStock);
+    }
+}
 TEST_CASE("Playerbot unowned template comparison refuses unproven random affixes", "[playerbot][inventory]")
 {
     REQUIRE(PlayerbotEquipment::TemplateComparable(false, false, 0));

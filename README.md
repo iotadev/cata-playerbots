@@ -31,23 +31,32 @@ The current development target is a human-led Warrior/Mage/Priest party.
 - The MultiBot bridge supports handshake/ping, authorized rosters and managed
   lifecycle requests. Strategy STATE framing and single-bot/group mutation
   acknowledgements use the same strategy-control layer as ordinary chat.
+- Inventory support includes bounded `gear?` inspection, explicit one-slot
+  `gear apply`, starter scoring at levels 10–39 and guarded native loot votes.
+  Qualified native affixes can be compared; unknown inputs remain unresolved.
+- Human-led quest controls cover native incoming shares, nearby-giver acceptance,
+  active-log inspection, explicit rewards and separately enabled abandonment.
+  Native admission and inventory rules remain authoritative. Per-player quest
+  drops are exempt from the optional human-first loot policy.
+- Optional passive action history records bounded engine decisions and action
+  returns for the separate context observer. Collection defaults off; a return
+  value does not prove a spell landed or an asynchronous operation completed.
 
 Implemented optional behavior requires its configuration gates and native
 eligibility checks. A registered strategy or accepted cast does not establish
-every spell effect, path or encounter outcome. Autonomous populations, questing,
+every spell effect, path or encounter outcome. Autonomous populations, autonomous questing,
 travel, group formation and full dungeon/class parity remain future work.
 
 ## Validation
 
-The published coordination/recovery milestone passed 324 tests on Windows and
-Linux. The local gear/loot milestone follows that baseline and remains unpublished.
-Current qualification is:
+The October 2026 milestone combines party coordination, native gear/loot and
+human-led quest work. Release qualification is:
 
 | Source scope | Build result |
 | --- | --- |
-| Current local Windows source, including native party rolls | worldserver/tests-common built; 384/384 tests passed |
-| Current local Linux source, including native party rolls | worldserver/tests-common built; 384/384 tests passed |
-| Current Windows build with both optional modules disabled | worldserver/tests-common built; 19 core tests passed |
+| Windows, all installed modules enabled | worldserver/tests-common built; 431/431 tests passed |
+| Linux, complete current source and observer integration | worldserver/tests-common built; 431/431 tests passed |
+| Windows, all three installed optional modules disabled | worldserver/tests-common built; 19/19 core tests passed |
 
 Linux builds use Ubuntu 22.04/GCC 11.4 with normal PCH; Linux server runtime remains untested.
 [PORTING.md](PORTING.md) records intermediate builds, donor revisions and adaptations.
@@ -75,6 +84,14 @@ Broader runtime coverage remains pending. Automatic equipping, purchases and
 disenchant classification remain ahead.
 Template comparison does not establish the identity or eligibility of an actual
 loot roll. The voting adapter additionally binds and rechecks native roll facts.
+
+A real level-20 quest replay observed all four bots accept a native shared quest,
+fight and loot its objectives, and reach native complete status. One explicit bot
+turn-in was confirmed; its rewarded history and chosen item were saved after clean
+shutdown. The other three bots remained complete but unrewarded. This is not
+automatic quest travel/turn-in, a full quest-chain test or a relogin check.
+The per-player loot exemption, reward batches, typed links and party-pushed
+confirmation have source/regression coverage but no dedicated live qualification.
 
 ## Build and configuration
 
@@ -105,6 +122,34 @@ guide spell selection; native Cata spell costs and healing remain authoritative.
 It still needs sustained-party qualification before broader use.
 
 ## Chat and addon controls
+
+### Human-led quests
+
+Quest settings under `Playerbots.Quest` default off. The current controller can
+use these commands by whisper, or authorized party chat where noted:
+
+| Command | Gate | Behavior |
+| --- | --- | --- |
+| Native client quest share | AcceptShared.Enabled | Accept eligible incoming human shares through native handlers |
+| `accept <quest>` / `accept *` | AcceptNpc.Enabled | Selected nearby giver; batch copies at most 25 offers and rechecks each |
+| `quests [all\|completed\|incompleted\|summary]` | Inspection.Enabled | Read native active-log facts; `co`/`in` are filter aliases |
+| `reward <quest> <item>` / `reward *` | Reward.Enabled | Explicit native reward; batch skips quests with several choice items |
+| `share <quest>` | Share.Enabled | Whisper one bot to submit a native party offer; not proof of recipient acceptance |
+| `drop <quest>` | Abandon.Enabled | Separate destructive opt-in; whisper one active quest only |
+
+Quest/item operands accept numeric IDs or native links. Reward uses an item
+entry, not a UI slot; item `0` is valid only for no-choice rewards. `reward *`
+attempts at most 25 active IDs at the selected giver, with zero or one choice.
+Mutation requests require fresh control, state and location checks. Partial
+batches are not rolled back or automatically retried. No forced completion,
+automatic travel, reward-choice guessing or rewarded-history reset is included.
+
+`Playerbots.Quest.SyncLootWithPlayer.Enabled` optionally defers competitive
+quest-class corpse items the human still needs. The native item's per-player
+flag exempts shared drops; the group's loot method is not that flag. Deferral
+does not reserve an item or change native recipient eligibility.
+
+### Party and addon controls
 
 Whisper an admitted bot, for example `/w Botmage list`, to list controllable
 online bots. `follow`, `hold`, `stay`, `attack`, `stop` and `buff` use the same

@@ -1,5 +1,625 @@
 # Port provenance and remaining work
 
+## Human-led party/quest release qualification — 2026-10-09
+
+This checkpoint packages the preceding gear/loot, native quest and passive
+diagnostic work. Windows full-script worldserver/tests-common passed 431/431.
+The complete Linux snapshot was refreshed with current core and Playerbots
+sources plus the canonical optional context module, explicitly reconfigured
+to discover new tests, and built with Ubuntu 22.04/GCC 11.4 normal PCH. It passed
+431/431; evidence is build/linux-release-20261009/LastTest.log and the compiler
+container stopped. Fresh Windows with all three installed optional modules off
+also built worldserver/tests-common and passed 19/19. The companion reader suite
+passed 43/43. These replace older partial snapshot/build qualifications below.
+
+The October 8 real-quest replay establishes four native ordinary shares and
+objective completion, with one explicit bot turn-in and saved reward presence.
+It does not establish automatic travel/turn-in, relogin, batch/link/party-pushed
+confirmation gameplay, new per-player exemption behavior or Linux realm runtime.
+Public README and core milestone record retain those limits. The exporter/query
+project is separate and is not bundled by the core/Playerbots publication.
+
+Outgoing source, docs and new history were reviewed for portable paths, runtime
+assets, private identifiers/credentials and donor attribution. No captured
+client data, copied databases, logs or binaries are release assets. Publication
+uses the verified iotadev author and authenticated account, with ordinary
+fast-forward updates. AHBot source is unchanged and matches its published pin;
+only its local metadata/docs differ, so no AHBot update is included.
+
+## Per-player quest-loot exemption and closed quest replay — 2026-10-08
+
+The human correctly noted that shared quest drops need no master-first delay.
+Native LootItem::freeforall, derived from ITEM_FLAG_MULTI_DROP, makes pickup
+per-player: Player::StoreLootItem marks that player's quest/FFA record and does
+not consume the global item for other eligible players. It is not the group's
+FREE_FOR_ALL distribution setting and does not imply a transfer/reservation.
+
+The existing world-owned corpse path now resolves each allowed/owner native
+LootListID through LootItemInSlot for the bot, including native quest-slot mapping.
+Only a matching item entry with actual freeforall=true exempts the slot from
+master quest priority. Unknown/missing slot facts retain conservative deferral;
+competitive quest items still defer while human need remains. Native loot
+visibility, admission, inventory and grant rules are unchanged. Only the copied
+boolean survives the local lookup; no live loot pointer is retained across a
+handler call or thread boundary. The regression covers per-player exemption
+versus competitive drops, disabled gate and satisfied human need.
+
+The completed copied replay build/playerbot-smoke-20261008-215311 recorded all
+four native accepts of quest 9156, combat/corpse looting and completed objectives.
+Testone's explicit reward 22979 was confirmed; after clean world/database shutdown,
+native rewarded history includes Testone and the human, and Testone's mapped
+owned inventory has one 22979 (none in the before report). The other three bots
+remain complete and unrewarded. This confirms one native explicit turn-in and
+saved reward presence, not all four turn-ins, exact item properties or relogin.
+Old priority deferred Testtwo's head 22893 while the human needed it; the new
+per-player exemption was not deployed during that replay.
+
+Linux prior reward-batch snapshot plus the exemption passed 425/425; compiler
+stopped, evidence in build/linux-per-player-quest-loot-20261008/LastTest.log.
+Concurrent observer history is outside that snapshot. Windows full-script
+worldserver/tests-common passed 431/431. No additional realm was started;
+fresh exemption gameplay is deferred
+to a normal future replay, not a separate mandatory test.
+
+## Native quest-share availability correction — 2026-10-08
+
+The copied Tranquillien replay used native quest 9156, Wanted: Knucklerot and
+Luzran, from actual Wanted Poster 181147. The human acquired it and all four
+bots processed `quests`; the five identities shared a group/map/instance and
+the optional phase diagnostics reported mutual peer visibility. No bot share
+acceptance was logged; saved state after clean shutdown retained 9156 only for
+the human. This is a failed sharing checkpoint, not a completed quest replay.
+
+Native Player::CanShareQuest rejected IsQuestActive=true, while the pool manager
+returns true both for active pooled quests and ordinary non-pooled quests.
+Corrected only the rejection polarity to !IsQuestActive. Existing sharable-flag,
+active-log lookup, native recipient admission and unavailable-pool response remain.
+This affects human sharing and bot sharing even with modules disabled; it is not
+a module bypass or donor forced-completion feature. The service-free regression
+checks the rejection and actual pool-manager contract alongside retained guards.
+
+Linux full-script worldserver/tests-common passed 424/424; compiler stopped and
+evidence saved in build/linux-native-quest-sharing-20261008/LastTest.log. Windows
+validation initially hit C1041 after overlapping builds wrote the same game.pdb.
+The synchronized serial retry then passed full-script worldserver/tests-common
+with 427/427 tests, including concurrent observer additions in the active tree.
+The preceding module-off 19-test build predates this core fix.
+The build helper now owns an exclusive per-output-directory file handle through
+configure/build/tests. Service-free checks cover refusal of a second owner,
+independent directories and reacquisition after release. Older running helpers
+and direct CMake are not covered. The quest-gate test now selects its actual AST
+assignments, not their old first-two position, preserving new observer resets.
+Windows retries serialize writers and use process-local /FS synchronization;
+no generated PDB was deleted and no global toolchain environment was changed.
+The Linux check applied this Player.cpp correction to the previously qualified
+reward-batch snapshot. Concurrent observer action-history changes in the active
+checkout are not qualified by that older snapshot's 424 tests. The synchronized
+Windows retry passed. Corrected realm attempt build/playerbot-smoke-20261008-214726
+aborted when another database claimed port 13306 during the copy/start interval;
+the attempt's owned processes stopped. No corrected realm is ready and no bot
+sharing or subsequent quest progression is observed yet. Do not repeat against
+shared ports until test ownership is coordinated.
+The user authorized coordination with the observer task, which released shared
+build output and selected separate runtime ports. Corrected quest fixture
+build/playerbot-smoke-20261008-215311 is ready on the ordinary Playerbots ports,
+with the human's saved quest retained. Client sharing remains pending.
+Corrected sharing still requires the resumed native client check; no acceptance
+or quest-item/reward outcome is inferred from the source repair.
+
+## Selected-giver unambiguous reward batch — 2026-10-08
+
+Adapted from TalkToQuestGiverAction::TurnInQuest/RewardNoItem/RewardSingleItem at
+remotely rechecked master `037c01418b5d01506917a3db9b44fd56ac5f965c`.
+Explicit `reward *` reuses the default-off Reward gate and selected-giver lease.
+It snapshots at most 25 native active quest IDs, then re-resolves bot, human and
+giver and rechecks control, location, state, gate and five-second age per quest.
+Only ordinary completed, unrewarded, non-repeatable/non-turn-in quests involving
+that giver qualify. Zero choice uses native slot zero; a single well-formed
+choice retains its actual Cata sparse slot. Multiple choices, malformed count/
+entry pairs and missing selected-item metadata are skipped, not ranked.
+
+Both native CanRewardQuest checks and the typed Cata reward handler remain the
+grant path. The donor's direct RewardQuest and forced CompleteQuest/master
+progress synchronization are not copied. Callback-driven cast/transfer/death or
+authority changes stop further attempts; partial results have no rollback,
+automatic retry or chain rescan. Native rewarded-status transitions are counted,
+not proof of exact reward contents, persistence or relogin. A batch intentionally
+changes quest/reward/inventory state and is not an inspection command.
+
+Three regressions cover exact wildcard scope, giver/zero-operand mailbox fencing
+and zero/single/multiple/malformed choice slots. Linux full-script worldserver/
+tests-common passed 424/424; compiler stopped, with evidence saved in
+build/linux-quest-reward-batch-20261008/LastTest.log. Windows full-script
+worldserver/tests-common also passed 424/424; no compiler remains running.
+Environment and seven wait-policy checks passed without services. No realm started.
+Use the next normal quest replay for client
+coverage, with manual `reward <quest> <item>` retained for multiple-choice quests.
+
+## Read-only donor quest-list filters — 2026-10-08
+
+Adapted from ListQuestsAction::Execute/ListQuests at remotely rechecked master
+`037c01418b5d01506917a3db9b44fd56ac5f965c`. `quests completed`/`co`,
+`quests incompleted`/`in`, `quests all` and `quests summary` use the existing
+default-off Inspection gate, world-owner native active log and bounded mailbox.
+Completed means native QUEST_STATUS_COMPLETE; donor incompleted means not
+complete, so failed entries remain included and visibly labelled. Summary counts
+the whole active log regardless of the selected detail filter.
+
+Bare `quests` retains this port's detailed output for compatibility; the donor
+defaults to summary. Travel/detail and travel-manager dependencies are not ported.
+Appended internal inspection operation IDs preserve existing operation values;
+all inspection variants require zero quest/item operands and the same fresh
+control/location checks. No core hook signature or quest mutation changes.
+Two regressions cover exact command aliases, detail selection, zero operands and
+mailbox fencing. Linux full-script worldserver/tests-common passed 421/421;
+compiler stopped and evidence saved in build/linux-quest-list-filters-20261008/LastTest.log.
+Windows full-script worldserver/tests-common also passed 421/421.
+Environment and seven wait checks passed without services.
+No realm started;
+filtered client output remains unobserved and can join the normal quest replay.
+
+## Narrow human quest-loot priority — 2026-10-08
+
+Adapted from ItemUsageValue::Calculate at upstream master
+`037c01418b5d01506917a3db9b44fd56ac5f965c`, rechecked for this batch. The donor
+defers master-needed quest items after its earlier skill/key/consumable/equipment
+categories. This slice covers only native quest-class corpse items, not the
+complete item-usage ordering, all item classes or bag/container loot.
+
+The independent default-off Playerbots.Quest.SyncLootWithPlayer.Enabled gate
+checks the current human controller's native HasQuestForItem on the existing
+world-owned corpse handler path. It skips only that bot's autostore attempt from
+the native allowed/owner view. Money, slot permissions, blocked/master loot,
+inventory admission and release retain native handling. There is no reservation,
+transfer, guaranteed human eligibility, roll override or copied quest progress.
+Once native human need is satisfied, the next eligible pickup is not deferred.
+The map-owned own-bot Useful reader is not called on this world-handler path.
+
+Two policy regressions cover opt-in/class/need and satisfied-need transition;
+they do not prove live quest-item pickup. QuestFixture opts into this gate in the
+copy; ordinary replays reset inherited values off, and abandonment remains separate.
+Linux full-script worldserver/tests-common passed 419/419; its compiler stopped,
+with evidence in build/linux-quest-loot-priority-20261008/LastTest.log. Windows
+full-script worldserver/tests-common also passed 419/419. Fixture environment,
+seven wait-policy and four controlled-loot branch checks passed without services.
+Core/API source is unchanged; the preceding module-off
+19-test result remains applicable. No realm started or live deferral observed.
+
+## Selected-giver bounded accept-all — 2026-10-08
+
+Adapted from donor AcceptAllQuestsAction and QuestAction::ProcessQuests at current
+master `037c01418b5d01506917a3db9b44fd56ac5f965c`. Explicit `accept *` uses the
+existing default-off AcceptNpc gate and captured selected giver/map/instance.
+It prepares the bot's native quest menu and copies at most 25 available-icon
+quest IDs before any accept callback. Existing/involved quests and turn-in
+dialogs are not auto-rewarded or treated as offers. No nearby-NPC discovery,
+quest progress copy, forced completion or direct AddQuest fallback is included.
+
+Each candidate resolves fresh player/requester/giver objects and rechecks control,
+attachment, native interaction, map/instance, request age and player state. Native
+typed acceptance retains eligibility/capacity/source-item/spell/script ownership.
+Casts/transfers/death/control changes or five-second expiry stop the batch; partial
+results are counted, not retried or rolled back. Menus are not iterated after they
+may have changed. Newly eligible chain quests are not rescanned automatically.
+No live game objects are retained across iterations without resolution/recheck.
+
+Two regressions cover the exact wildcard scope/trailing text and zero-single-ID,
+required-giver, one-mailbox intent. This is explicit human direction, not automatic
+quest acquisition or a native atomic transaction. Linux full-script
+worldserver/tests-common passed 417/417; compiler stopped, with evidence in
+build/linux-quest-accept-all-20261008/LastTest.log. Windows full-script
+worldserver/tests-common also passed 417/417; no compiler remains running.
+No core/API change; preceding module-off 19 tests remain applicable. No realm started.
+
+## Native quest/item hyperlink command compatibility — 2026-10-08
+
+Current donor quest actions extract quest/item links. This transport slice reuses
+TrinityCore ChatCommands::Hyperlink framing with strict module-side first-ID
+storage instead of a new link grammar or legacy truncating stoull conversion.
+Accept/share/drop support a numeric quest or typed quest link; reward supports
+numeric/typed quest and item operands, with numeric zero retained for no-choice
+intent. Share/drop remain whisper-only. Authority, giver, admission, state,
+native choice resolution and separate destructive opt-in remain unchanged.
+
+The parser preserves original markup (rather than lowercasing |H along with the
+verb), bounds the full command to 1024 bytes, gives native framing a complete
+NUL-terminated operand, checks color bytes and token boundaries, rejects wrong
+types/overflow/embedded NUL/trailing text, and accepts only exact commands. Link
+names/levels and item affix/enchantment data supply no authority or native-instance
+proof; only the entry ID is intent. Native handlers still resolve actual metadata.
+Numeric parsing helpers remain for their regression coverage and compatibility.
+
+Two regressions cover mixed numeric/link operands, title spaces, case and no-choice
+zero, plus malformed/wrong-type/overflow/trailing/oversized/NUL input. This is normal
+whisper/party transport compatibility, not a new LANG_ADDON protocol or MultiBot
+quest UI feature. Linux full-script worldserver/tests-common passed 415/415;
+compiler stopped, with evidence in build/linux-quest-links-20261008/LastTest.log.
+Windows full-script worldserver/tests-common also passed 415/415; no compiler
+remains running. Core code/API are unchanged;
+the previous module-off 19-test pass remains applicable. No client replay started.
+
+## Explicit active quest abandonment — 2026-10-08
+
+Adapted from DropQuestAction at verified upstream master
+`037c01418b5d01506917a3db9b44fd56ac5f965c`, using native Cata abandonment instead
+of its direct SetQuestSlot/TakeQuestSourceItem/RemoveActiveQuest operations. The
+default-off independent Playerbots.Quest.Abandon.Enabled gate admits only
+`drop <numeric active quest ID>` by whisper to one controlled bot. No party
+fan-out, wildcard/title matching, obsolete-quest cleanup or rewarded-history
+reset is ported. Completed history without an active slot cannot be deleted.
+
+The existing copied-intent/expiry/authority/state/map/instance checks apply.
+Execution resolves and rechecks the current native log slot, then calls typed
+QuestLogRemoveQuest. Native equipment/source-item eligibility, timed/PvP state,
+quest-granted item removal, scripts, achievement and persistence behavior remain
+owned by Cata. Abandonment may remove quest-provided items; ordinary requirement
+drops retain native rules. Confirmation means active-slot removal, not proven
+exact item preservation, saved state or relogin. No abandonment was executed.
+
+Two regressions cover single numeric intent/no reward data and operation/serial
+fencing. QuestFixture explicitly keeps abandonment off even while other quest
+controls are enabled; a separate -QuestAbandon opt-in requires QuestFixture.
+The environment tests verify inherited enabled abandonment is removed and that
+the separate opt-in is honored. Linux full-script worldserver/tests-common passed
+413/413; its compiler is stopped, with evidence in build/linux-quest-abandon-20261008/.
+Windows full-script worldserver/tests-common also passed 413/413; no compiler
+remains running. Core files
+are unchanged and the previous module-off 19-test pass remains applicable.
+
+## Explicit outgoing party quest share — 2026-10-08
+
+Adapted from ShareQuestAction at verified upstream master
+`037c01418b5d01506917a3db9b44fd56ac5f965c`. Default-off
+Playerbots.Quest.Share.Enabled admits `share <numeric quest ID>` by whisper to
+one controlled bot. No party-chat fan-out or automatic share loop was introduced.
+The existing mailbox rechecks current full control, attachment, map/instance,
+alive/out-of-combat state, a shared non-battleground group, active-log ownership
+and CanShareQuest. It expires after five seconds and needs no giver/item intent.
+
+Execution uses Cata's native HandlePushQuestToParty uint32 input, not the donor's
+typed WotLK packet. Recipient eligibility, capacity, busy and auto-accept quest
+flags stay native. Submission is not acceptance/persistence. Incoming bot-origin
+offers are not auto-consented by the human-only AcceptShared adapter; no new
+bot-to-bot delegation, quest add, progress copy or core hook was introduced.
+
+Two regressions cover parsing/signed bounds, giver-free intent and operation
+fencing. QuestFixture resets all five gates. Linux full-script worldserver/tests-common
+passed 411/411; its compiler stopped, with ignored evidence in
+build/linux-quest-outgoing-share-20261008/LastTest.log. Windows full-script
+worldserver/tests-common also passed 411/411; no compiler remains running.
+the preceding module-off 19-test check applies to unchanged core files. No realm
+was started. Outgoing offer/client acceptance/persistence remain unobserved.
+
+## Party-pushed quest confirmation and native identity repair — 2026-10-08
+
+Donor QuestConfirmAcceptAction at verified master
+`037c01418b5d01506917a3db9b44fd56ac5f965c` responds through the native confirmation
+handler. The existing AcceptShared gate now routes actual pending party-pushed
+acceptance to Cata's typed QuestConfirmAccept; ordinary shares retain the typed
+QuestGiverAcceptQuest route. Party pushes require the native flag and active quest
+on the controlled human sharer, not a manual-shareable flag. Turn-in dialogs and
+signed confirmation-ID overflow remain unsupported. No synthetic invitation,
+WotLK wire layout, direct AddQuest or duplicate source-spell cast was introduced.
+
+Source review found HandleQuestConfirmAccept clearing both sharing fields before
+its sharer lookup. Local blame attributes that ordering to a3dd0d75cfe (2023-07-11),
+not recent module work; this says nothing about the latest remote core. The narrow
+repair copies the GUID before clearing and uses the copy for lookup. Native
+pending-ID, same-raid, original-active-quest, CanTakeQuest and CanAddQuest checks
+are unchanged, as are native source-spell/script semantics. The repair affects
+human confirmations too, even with modules disabled.
+
+Two routing regressions cover manual/party eligibility, active sharer, turn-in
+and signed bounds. The environment suite separately checks capture/clear/lookup
+source order and native admission-guard presence; this is not a player/session
+gameplay test. Linux full-script worldserver/tests-common passed 409/409 tests;
+compiler stopped, with ignored evidence in build/linux-quest-confirmation-20261008/.
+Windows full-script worldserver/tests-common also passed 409/409; fresh Windows
+all-modules-off passed 19/19. No compiler remains running. Human/bot confirmation
+and saved/relogin outcomes remain unobserved. A real party-pushed quest may join
+the later bundled replay when available; do not force one to close coverage.
+
+## Native active quest inspection — 2026-10-08
+
+Adapted from current donor ListQuestsAction at verified upstream master
+`037c01418b5d01506917a3db9b44fd56ac5f965c`. Default-off independent
+Playerbots.Quest.Inspection.Enabled admits the exact `quests` whisper/party
+command through the existing bounded quest mailbox. It lists at most 25 active
+native slots, quest IDs/titles/status, six carried-item requirement counts, four
+native kill/GO counters and up to six reward item IDs/counts, followed by a summary.
+Titles use the native UTF-8 truncation helper. Carried counts exclude bank and are
+not an invented quest-objective tally; status comes from native GetQuestStatus.
+Currency, exploration, player-kill/timer and other conditions are not detailed.
+Donor filters/travel descriptions, localization and quest links are not ported.
+
+Read inspection requires current full control, attachment, same captured map/
+instance and non-transfer/loading/logout state. It may read during combat/death
+or a pending share dialog; it never clears that dialog or invokes accept/reward
+handlers. The mutation-only alive/out-of-combat/cast guards remain unchanged.
+The existing core forwarding function now permits the module-validated zero
+quest/giver read envelope; no public header or new session hook was added. A
+domain/mailbox regression prevents inspection from carrying quest/reward intent.
+This is world-owner native data, not a map-engine read or external API expansion.
+QuestFixture explicitly resets all four quest gates including Inspection, and
+the existing environment tests check inherited enabled settings for all four.
+Windows/Linux full-script worldserver/tests-common built and 407/407 tests passed.
+Linux compiler is stopped; ignored evidence is
+build/linux-quest-inspection-20261008/LastTest.log. Fresh Windows all-modules-off
+worldserver/tests-common passed 19/19 for the forwarding implementation change.
+No compiler remains running. No realm was
+started or live read qualified.
+
+## Explicit native reward execution (uncommitted)
+
+Source basis remains RewardAction::Reward / TalkToQuestGiverAction at verified
+master `037c01418b5d01506917a3db9b44fd56ac5f965c`. The default-off
+Playerbots.Quest.Reward.Enabled gate admits whisper/party
+`reward <quest ID> <item ID>` from the controlling human at a selected nearby
+quest giver. Item zero means no choice item only for an actual zero-choice quest.
+Expected item intent is resolved against the current six native slots; missing,
+ambiguous duplicate entries and malformed item/count pairs reject. A cached
+recommendation is not consulted or treated as reward authorization.
+
+The unpublished acceptance-only bridge is generalized to a copied quest-command
+operation/item envelope, with module-side validation. Acceptance still requires
+item zero; reward quest IDs must fit the signed Cata packet field. Acceptance
+and reward share one mailbox/serial, five-second expiry and giver/map/instance
+binding. Existing full-control, attachment, alive/out-of-combat, transfer/loading/
+logout and native interaction checks are retained. Reward requires an involved
+giver, ordinary non-repeatable/non-turn-in quest, native completed state and both
+CanRewardQuest overloads. The typed QuestGiverChooseReward handler owns item/money/
+XP grants, item consumption, quest scripts and native persistence. The module
+does not call RewardQuest directly, force completion or invent inventory space.
+Already-rewarded quests do not invoke a second grant. Confirmation means the
+native rewarded predicate changed, not proven item contents or saved/relogin state.
+
+Four regressions cover strict item-intent parsing/signed quest range, shared
+mailbox operation fencing, sparse native slot resolution and ambiguous/malformed
+choices. Auto-selection, links, automatic completion, repeatable/daily/turn-in
+flows and progress/master synchronization remain separate. QuestFixture now
+explicitly resets all three quest gates, including Reward, on every copied
+configuration. Windows/Linux full-script worldserver/tests-common built and
+406/406 tests passed. Linux compiler is stopped; ignored evidence is
+build/linux-quest-reward-execution-20261008/LastTest.log. Fresh Windows all-three-
+modules-disabled worldserver/tests-common passed 19/19 after the bridge change.
+No compiler or realm remains running.
+
+The existing QuestFixture now also captures bounded rewarded history and native
+inventory-mapped item totals (including bank), level/XP/money before admission
+and after clean shutdown in quest-reward-state-result.json. Orphan item rows do
+not count. Mocked reader tests cover empty/valid/malformed/over-limit rows,
+ownership joins, numeric range and invalid GUID scope. This is comparison evidence,
+not an automatic reward assertion: natural gameplay can alter counts/resources,
+and item properties/relogin remain separate. No reward has been live-qualified.
+
+## Read-only quest reward-choice dependency — 2026-10-07
+
+Verified upstream master is still `037c01418b5d01506917a3db9b44fd56ac5f965c`.
+This batch adapts TalkToQuestGiverAction::BestRewards/RewardMultipleItem: useful
+equipment/replacements outrank BadEquip, then the donor's first non-None category
+in native choice order supplies the candidate set. Existing template equipment
+comparisons and shared item-usage readers provide the Cata facts; no new weight
+table, vendor classification or pretend native reward instance was introduced.
+
+The map-owned calculated `quest reward choices` value takes a strict numeric quest
+qualifier and publishes copied owner/quest/choice facts plus ranking. It reads all
+six Cata slots, retains sparse native slot indices, and refuses missing item/count
+rows rather than silently compacting them. Survey availability means readable
+choice metadata, not reward eligibility or completed quest state. Selection Ready
+means the policy has enough facts; a single mandatory choice needs no usage ranking.
+For multiple choices, Unknown is not donor None. Missing/non-finite scores leave
+multiple qualified candidates unresolved; ties use the lowest native candidate
+slot. The donor's zero-score fallback to slot zero is not copied when that slot
+is absent from the qualified set.
+
+Existing starter template admission may create/delete a transient native Item and
+consume an item GUID; it never stores/saves a reward item. Cached facts remain
+map-owned advice, not freshness/authorization for a later reward mutation. Native
+giver, quest completion, choice index/count, inventory capacity/uniqueness and
+quest scripts must be revalidated by the eventual execution path. This batch has
+no chat/addon reward command, auto-turn-in, source-item completion, RewardQuest,
+database write or core bridge change. Progress/master synchronization remains
+separate. Four tests cover zero/single/sparse slots, donor category precedence,
+ties/zero-score indices, malformed/unknown and incomplete score inputs.
+Linux full-script worldserver/tests-common built and 402/402 tests passed;
+ignored evidence is build/linux-quest-reward-choices-20261007/LastTest.log.
+Its compiler container is stopped. Windows full-script worldserver/tests-common
+also passed 402/402 tests. No compiler or realm remains running. The preceding
+module-off 19-test build is unchanged: this
+dependency adds no core header/API or runtime reward action.
+
+## Explicit selected-giver NPC acceptance — 2026-10-07
+
+Upstream master remains `037c01418b5d01506917a3db9b44fd56ac5f965c` (remote
+rechecked). This batch adapts AcceptQuestAction and QuestAction::AcceptQuest.
+Default-off Playerbots.Quest.AcceptNpc.Enabled admits `accept <numeric quest ID>`
+through ordinary bot whisper or existing party/raid command scope. The human's
+selected creature/gameobject supplies the giver identity; there is no NPC scan,
+accept-all, item/self giver, quest-link parser or autonomous travel in this slice.
+
+One copied request per bot carries requester, quest, full giver GUID, map/instance,
+creation time and serial. The thin optional session bridge only posts intent;
+the existing world-owner update consumes it. It expires after five seconds and
+rechecks human identity, full control, attachment, map/instance, alive/idle/transfer
+state, an empty native share dialog and both players' native interaction with the
+actual quest giver. The giver must offer that quest. Cata's typed accept handler
+retains CanTakeQuest/CanAddQuest, source-item/spell and quest-script ownership.
+No WotLK wire layout is copied. The donor's syncQuestWithPlayer direct AddQuest
+fallback after native failure is deliberately not ported: rejected native
+acceptance remains rejected in this fork.
+
+Queued receipt is not completion. Native quest-log slots distinguish newly
+accepted, already present and rejected outcomes. Requests hold no Player/Quest/
+giver pointers and are not retried after denial. A pending native shared dialog
+is left untouched, not replaced by the explicit NPC command. Three regressions
+cover strict numeric parsing, copied identity/capacity/completion fencing and
+expiry across timer wrap. Authority and native acceptance are source-reviewed,
+not live-qualified. Windows full-script worldserver/tests-common built and
+398/398 tests passed. Linux full-script worldserver/tests-common also passed
+398/398; its compiler container is stopped, with ignored evidence in
+build/linux-quest-npc-20261007/LastTest.log. Windows all-three-modules-disabled
+worldserver/tests-common passed 19/19. This session bridge changes a common header and therefore
+triggers a wider rebuild. The
+preceding ordinary-share slice passed 395 tests on both platforms.
+
+The existing copied-realm harness now supports opt-in -QuestFixture for the
+reused interactive recovery/mixed-party recipe. Both acceptance gates are
+explicitly reset on every generated configuration, disabled unless that option
+is selected. The actual reset prefix is exercised in memory by the existing
+environment test, including duplicate/indented enabled seed entries; syntax,
+environment and the existing seven wait/four controlled-loot checks passed.
+No native realm was started. Fresh module-disabled validation of the new core
+session bridge passed; no compiler remains running.
+
+Opt-in QuestFixture now records saved quest presence/status before admission and
+after clean native world shutdown, with a 125-row bound for the five-character
+roster. It captures complete/incomplete/failed states without editing them. The
+existing environment tests exercise empty/valid/malformed/over-limit rows and
+invalid GUID scope using mocked read-only SQL. Native quest persistence/relogin
+remains unobserved; no forced acceptance assertion or item/quest grant was added.
+
+## Ordinary human-controller quest shares — 2026-10-07
+
+Adapted from upstream AcceptQuestShareAction at the verified master revision
+`037c01418b5d01506917a3db9b44fd56ac5f965c`. The new default-off
+Playerbots.Quest.AcceptShared.Enabled setting permits an admitted bot to respond
+to an existing ordinary native pending quest share. The share itself remains
+owned by Cata's player/session state; there is no synthetic invitation, outgoing
+packet interception, new core hook or direct quest/database edit.
+
+The existing world-owner session update checks the current human sharer, native
+group/map, attachment and full control authority; the bot must be alive, idle,
+not loading/logging out, flying or transferring. It resolves the quest and
+requires native sharer eligibility. Cata's typed QuestGiverAcceptQuest handler
+then retains interaction, CanTakeQuest/CanAddQuest, sharing response, source-item/
+spell and script ownership. Unlike the donor, this adapter does not call AddQuest
+directly or copy WotLK packet layouts. The bounded receipt identity permits one
+attempt per observed pending share and resets when native sharing state clears.
+
+Outcome logging/replies distinguish a newly observed active quest from already
+present and not accepted. Receipt or a handler call is not reported as success.
+Ordinary shares only: pushed-to-party acceptance confirmations and turn-in dialogs
+are explicitly excluded. NPC discovery, quest rewards, master progress syncing,
+automatic loot quest policy and autonomous questing remain separate ports.
+Unsupported/unauthorized native pending dialogs are left untouched rather than
+silently accepted or deleted; handling their decline/timeout UX is later work.
+
+Two receipt regressions cover duplicates, changed share identities, clearing and
+later identical offers. Native authority/admission and persistence are source-
+reviewed, not live-qualified. Linux full-script worldserver/tests-common built and
+395/395 tests passed; ignored evidence is build/linux-quest-share-20261007/LastTest.log.
+The compiler container is stopped. The first compile exposed a WotLK HasQuest
+assumption; completion now uses Cata FindQuestSlot against MAX_QUEST_LOG_SIZE.
+The corrected Windows worldserver/tests-common build also passed 395/395 tests.
+No compiler remains running. The preceding own-quest/
+consumable dependency passed 393 tests on each platform.
+
+## Own-quest item usefulness dependency — 2026-10-07
+
+Upstream master was rechecked and remains
+`037c01418b5d01506917a3db9b44fd56ac5f965c`. This batch adapts
+`ItemUsageValue::IsItemUsefulForQuest`: native HasQuestForItem first (including
+quest source items), then the donor carried-count fallback for active-log direct
+objectives and item spells with SPELL_EFFECT_CREATE_ITEM. Cata uses six item
+objectives rather than the donor's four, and ItemTemplate::Effects rather than
+the WotLK fixed spell array. Only matching objective IDs trigger inventory counts.
+These are map-owner reads, with no cache mutation, database write or spell cast.
+
+The existing `item usage` value can now return Quest with a distinct QuestLog scope
+for non-affixed items reaching its previously unsupported fallback. Useful
+consumable stock (Use/Keep) and equipment decisions retain precedence; exhausted
+or unsupported consumable stock can now reach quest usefulness, covering quest
+consumables. If the quest predicate is false, the existing stock result is retained;
+other unsupported item classes remain Unknown, not None. Master quest
+synchronization, container-loot exceptions,
+quest acceptance/sharing/reward and profession/economic precedence are not ported.
+This is not a complete copy of donor ItemUsageValue::Calculate.
+
+The native roll adapter is unchanged: QuestLog is not native-loot eligibility or
+equipment proof. No new need vote, autonomous loot policy or permission bypass is
+introduced. Three tests cover outstanding objective/count rules, the existing
+pass policy for quest facts and consumable fallback precedence. Native source/
+create-item integration is source-checked, not live quest-qualified. The initial
+Windows dependency build passed 392 tests. With the consumable fallback included,
+Linux worldserver/tests-common built and 393/393 tests passed; evidence is ignored
+build/linux-quest-items-20261007/LastTest.log. Its compiler container is stopped.
+The corresponding Windows incremental build/test run also passed 393/393.
+
+The connected slices recorded above now use donor AcceptQuestAction/
+AcceptQuestShareAction semantics and native Cata admission, not direct database
+quest edits or copied WotLK wire layouts. Source review identified Cata's typed
+QuestGiverAcceptQuest and QuestConfirmAccept handlers and native sharing state;
+receiving a share or command alone must not be treated as completed acceptance.
+Quest rewards, NPC discovery/travel and autonomous questing remain separate work.
+
+## Read-only context companion integration — 2026-10-07
+
+The existing companion core/Playerbots patches were reconciled into the current
+gameplay source, preserving the affix extension. A generic map-session player
+update hook dispatches after the bot update; optional diagnostics copy engine
+state/strategies, active-engine last-action value, staying and queue count. The
+getter is map-owner-only and independent of strategy mutation gates. The
+canonical exporter remains in cata-context-api/server-module, linked into this
+checkout as optional mod-context-api. It copies scoped native state to a cache
+and publishes JSON from a background writer; external readers retain no game
+pointers. Runtime capture defaults off.
+
+The current full-party harness supports explicit -ContextCapture, writes a
+disabled config otherwise, and captures the controller plus four bot identities.
+The companion's 17 reader/interface tests passed again. Windows full-script
+worldserver/authserver/tests-common and Linux full-script worldserver/tests-common
+built successfully, with 390/390 native tests on each. Windows with all three
+optional modules disabled passed 19/19. Linux compiler was stopped. The approved
+five-member copied replay completed in build/playerbot-smoke-20261007-164901/.
+All five shared Ragefire instance 1; native logs recorded Mage/Warrior actions,
+Priest healing, target-death transitions, corpse opening and a drink start.
+The harness exited zero and stopped its owned services; all five had combat and
+offline observations and the capture published stopped status. The monitor also
+counted 434 stale online entity polling observations, with maximum sample skew
+4034 ms. This is not full freshness qualification, and native sampling cost is
+unmeasured. The totals cannot establish a cause. A bounded external anomaly
+reporter now retains timing/age/status evidence for a later ordinary session;
+23 Python tests passed, including six reporter regressions. No gameplay policy
+or native hook was changed for that diagnostic addition.
+Existing API field meanings and limits remain in the canonical
+snapshot contract; selected target/last action do not prove a current attack or
+landed spell, and per-entity sampling is not an atomic party snapshot.
+
+## Native random-affix roll comparison — 2026-10-07
+
+Donor ItemUsageValue::QueryItemUsageForEquip and StatsWeightCalculator affix
+scoring remain pinned at current master `037c01418b5d01506917a3db9b44fd56ac5f965c`
+(remote verified for this batch). Cata's ItemEnchantmentMgr provides native
+property/suffix type semantics and GenerateEnchSuffixFactor. The roll adapter
+passes verified copied metadata to the shared unowned comparison reader.
+The ordinary template query remains non-affixed; no string qualifier can grant
+the new native-loot proof.
+
+Properties normalize to positive signed IDs, suffixes to negative IDs. Invalid
+types, incompatible/both template modes, missing generated affixes, signed-range
+overflow and mismatched/zero suffix factors are rejected. Existing collector
+lookups must resolve the enchantment and all required effects; unknown/proc/use/
+conditional/socket/set inputs still cannot score. AffixLootVerified is applied
+only to a local copied stat fact, independently of owned-instance proof, and
+never written into the cached hypothetical value. The native group fence still
+binds the actual blocked loot entry/count/affix and revalidates before voting.
+
+Comparison rows copy the normalized property and factor without implying an
+owned item GUID. Native slot admission and current owned scoring remain in use.
+Same-entry copies count as the same variant only when property/factor also match,
+allowing a better affix on the same base item to qualify as an upgrade. This
+correction applies to both carried and unowned comparisons. No weighting table,
+default gate, core API or native inventory/loot persistence was replaced.
+
+Four regressions cover positive property mapping, negative suffix/scaling,
+malformed/absent metadata and same-entry variant upgrades. The existing score
+test verifies local loot proof cannot alter cached facts or admit proc effects.
+Windows/Linux worldserver/tests-common built and 388/388 tests passed on each;
+Linux evidence is ignored `build/linux-loot-affix-20261007/`. Compiler container
+is stopped. Natural-affix decisions/awards remain unobserved and can join the
+next human-led dungeon; no isolated playtest was run. This batch is uncommitted
+after the closed 384-test milestone.
+
 ## Gear/loot milestone qualification and review — 2026-10-07
 
 The complete local source passed Windows and Linux worldserver/tests-common

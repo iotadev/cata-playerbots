@@ -8,6 +8,8 @@
 #include "PlayerbotRoster.h"
 #include "../Ai/Base/PlayerbotCombatMovement.h"
 #include "../Ai/Base/PlayerbotEquipmentInspection.h"
+#include "../Ai/Base/PlayerbotQuestAccept.h"
+#include "../Bot/Cmd/PlayerbotQuestChat.h"
 #include "PlayerbotSecurity.h"
 #include "PlayerbotSessionHooks.h"
 #include "PlayerbotConfig.h"
@@ -22,6 +24,37 @@
 
 namespace
 {
+void RequestQuestCommand(Player& sender, ObjectGuid botGuid, uint32 quest,
+    PlayerbotQuestAccept::Operation action = PlayerbotQuestAccept::Operation::Accept, uint32 item = 0)
+{
+    ChatHandler reply(sender.GetSession());
+    bool inspect = PlayerbotQuestAccept::IsInspection(action);
+    bool share = action == PlayerbotQuestAccept::Operation::Share;
+    bool abandon = action == PlayerbotQuestAccept::Operation::Abandon;
+    bool acceptAll = action == PlayerbotQuestAccept::Operation::AcceptAll;
+    bool rewardAll = action == PlayerbotQuestAccept::Operation::RewardAll;
+    if (!inspect && !acceptAll && !rewardAll && !quest) { reply.SendSysMessage("Select a nearby quest giver and use accept <quest ID/link> or accept *."); return; }
+    bool reward = action == PlayerbotQuestAccept::Operation::Reward || rewardAll;
+    if (!(abandon ? PlayerbotModuleQuestAbandonEnabled() : share ? PlayerbotModuleQuestSendShareEnabled() : inspect ? PlayerbotModuleQuestInspectionEnabled() : reward ? PlayerbotModuleQuestRewardEnabled() : PlayerbotModuleQuestAcceptEnabled()))
+    { reply.SendSysMessage("That native quest operation is disabled."); return; }
+    ObjectGuid giver = (inspect || share || abandon) ? ObjectGuid::Empty : sender.GetTarget();
+    if (!inspect && !share && !abandon && !giver.IsCreature() && !giver.IsGameObject())
+    { reply.SendSysMessage("Select a nearby creature/gameobject quest giver first."); return; }
+    WorldSession* session = sWorld->FindServerOriginPlayerbot(botGuid);
+    Player* bot = session ? session->GetPlayer() : nullptr;
+    if (!bot || !bot->IsInWorld() || bot->GetGUID() != botGuid)
+    { reply.SendSysMessage("That Playerbot is unavailable."); return; }
+    if (!sender.IsInWorld() || sender.GetMap() != bot->GetMap() ||
+        !PlayerbotSecurity(*bot).CheckLevelFor(PLAYERBOT_SECURITY_ALLOW_ALL, sender))
+    { reply.SendSysMessage("Quest acceptance requires control and the same map/instance."); return; }
+    uint32 requester = sender.GetGUID().GetCounter();
+    if (session->GetServerOriginFollowTargetGuidLow() != requester &&
+        session->GetServerOriginPartyControllerGuidLow() != requester)
+    { reply.SendSysMessage("That Playerbot must be attached to you before accepting quests."); return; }
+    reply.SendSysMessage(session->RequestPlayerbotQuestCommand(requester, quest, giver.GetRawValue(),
+        sender.GetMapId(), sender.GetInstanceId(), uint32(action), item) ?
+        "Quest operation requested; wait for the native completion reply." : "Quest request busy or disabled.");
+}
 void RequestGearApply(Player& sender, ObjectGuid botGuid)
 {
     ChatHandler reply(sender.GetSession());
@@ -75,8 +108,38 @@ public:
 
         std::string command = NormalizePlayerbotControlChat(message);
         ChatHandler reply(sender->GetSession());
+        if (auto inspection = PlayerbotQuestAccept::ParseInspection(command))
+        { RequestQuestCommand(*sender, receiver->GetGUID(), 0, *inspection); return; }
+        if (PlayerbotQuestAccept::RecognizesDrop(command))
+        {
+            auto args = PlayerbotQuestChat::Parse(message);
+            if (!args) reply.SendSysMessage("Whisper one controlled bot: drop <active quest ID or quest link>. Native abandonment can remove quest-provided items.");
+            else RequestQuestCommand(*sender, receiver->GetGUID(), args->Quest, args->Action);
+            return;
+        }
+        if (PlayerbotQuestAccept::RecognizesShare(command))
+        {
+            auto args = PlayerbotQuestChat::Parse(message);
+            if (!args) reply.SendSysMessage("Whisper one controlled bot: share <quest ID or quest link>.");
+            else RequestQuestCommand(*sender, receiver->GetGUID(), args->Quest, args->Action);
+            return;
+        }
         if (IsPlayerbotGearInspection(command)) { ReportGear(*sender, receiver->GetGUID()); return; }
         if (IsPlayerbotGearApply(command)) { RequestGearApply(*sender, receiver->GetGUID()); return; }
+        if (PlayerbotQuestAccept::Recognizes(command))
+        {
+            auto args = PlayerbotQuestChat::Parse(message);
+            if (!args) reply.SendSysMessage("Select a nearby quest giver and use accept <quest ID or quest link>.");
+            else RequestQuestCommand(*sender, receiver->GetGUID(), args->Quest, args->Action);
+            return;
+        }
+        if (PlayerbotQuestAccept::RecognizesReward(command))
+        {
+            auto args = PlayerbotQuestChat::Parse(message);
+            if (!args) reply.SendSysMessage("Select the quest giver and use reward <quest ID> <item ID>; item 0 only for no choices.");
+            else RequestQuestCommand(*sender, receiver->GetGUID(), args->Quest, args->Action, args->Item);
+            return;
+        }
         if (command == "list")
         {
             std::vector<PlayerbotRosterEntry> roster = PlayerbotRoster::ListActiveFor(*sender);
@@ -138,7 +201,17 @@ public:
         bool strategy = PlayerbotStrategyControl::Recognizes(command);
         bool gear = IsPlayerbotGearInspection(command);
         bool applyGear = IsPlayerbotGearApply(command);
-        if (!applyGear && !gear && !range && !strategy && !ParsePlayerbotControlChat(command, action))
+        bool acceptQuest = PlayerbotQuestAccept::Recognizes(command);
+        auto inspectQuests = PlayerbotQuestAccept::ParseInspection(command);
+        bool rewardQuest = PlayerbotQuestAccept::RecognizesReward(command);
+        auto rewardArgs = rewardQuest ? PlayerbotQuestChat::Parse(message) : std::nullopt;
+        if (rewardQuest && !rewardArgs)
+        { ChatHandler(sender->GetSession()).SendSysMessage("Select the quest giver: reward <quest ID> <item ID>, or reward * for zero/single-choice quests. Item 0 only for no choices."); return; }
+        auto acceptArgs = acceptQuest ? PlayerbotQuestChat::Parse(message) : std::nullopt;
+        uint32 quest = acceptArgs ? acceptArgs->Quest : 0;
+        if (acceptQuest && !acceptArgs)
+        { ChatHandler(sender->GetSession()).SendSysMessage("Select a nearby quest giver and use accept <numeric quest ID>."); return; }
+        if (!inspectQuests && !rewardQuest && !acceptQuest && !applyGear && !gear && !range && !strategy && !ParsePlayerbotControlChat(command, action))
             return;
         if (strategy && !PlayerbotStrategyControl::Parse(command))
         {
@@ -163,6 +236,9 @@ public:
             // Dispatch independently rechecks native identity and full control.
             if (gear) { ReportGear(*sender, entry.Guid); continue; }
             if (applyGear) { RequestGearApply(*sender, entry.Guid); continue; }
+            if (acceptQuest) { RequestQuestCommand(*sender, entry.Guid, quest, acceptArgs->Action); continue; }
+            if (inspectQuests) { RequestQuestCommand(*sender, entry.Guid, 0, *inspectQuests); continue; }
+            if (rewardQuest) { RequestQuestCommand(*sender, entry.Guid, rewardArgs->Quest, rewardArgs->Action, rewardArgs->Item); continue; }
             if ((strategy ? PlayerbotControl::DispatchStrategy(*sender, entry.Guid, command) :
                 range ? PlayerbotControl::DispatchRange(*sender, entry.Guid, rangeParam) :
                 PlayerbotControl::Dispatch(*sender, entry.Guid, action)) == PlayerbotControlResult::Queued)

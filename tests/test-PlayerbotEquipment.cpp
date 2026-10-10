@@ -166,6 +166,10 @@ TEST_CASE("Playerbot partial equipment inputs stay unavailable for scoring", "[p
     auto verified = stats; verified.AffixInstanceVerified = true;
     REQUIRE(Score(verified, Model()) == 20);
     REQUIRE_FALSE(Score(stats, Model())); // Owned proof cannot leak into cached hypothetical facts.
+    auto lootVerified = stats; lootVerified.AffixLootVerified = true;
+    REQUIRE(Score(lootVerified, Model()) == 20);
+    REQUIRE_FALSE(Score(stats, Model())); // Native loot proof is local too.
+    lootVerified.HasProcEffects = true; REQUIRE_FALSE(Score(lootVerified, Model()));
     stats.AffixPoolUnverified = false; REQUIRE(Score(stats, Model()) == 20);
 }
 TEST_CASE("Playerbot score rejects nonfinite inputs weights and narrowing overflow", "[playerbot][inventory]")

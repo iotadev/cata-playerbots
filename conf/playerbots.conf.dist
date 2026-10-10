@@ -264,7 +264,8 @@ Playerbots.Equipment.StarterScore.Enabled = 0
 # Requires StarterScore. No automatic gear loop, purchases, bags or loot votes.
 Playerbots.Equipment.StarterEquip.Enabled = 0
 
-# Optional native party rolls for supported non-affixed starter gear/consumables.
+# Optional native party rolls for supported starter gear/consumables. Actual
+# native gear affixes require validated property/suffix/factor and known effects.
 # Requires StarterScore; PassOnGroupLoot must be disabled. Unknown items pass.
 # No automatic equipping, recipe/token/profession/disenchant classification.
 Playerbots.Loot.Rolls.Enabled = 0
@@ -273,3 +274,44 @@ Playerbots.Loot.Rolls.Enabled = 0
 # and leave its slot empty for a deterministic native loot-need check.
 # Requires Dev.Enabled and Dev.Fixture20.Enabled. Never normal provisioning.
 Playerbots.Dev.LootRollFixture.Enabled = 0
+
+# Accept ordinary shares and native party-pushed accept confirmations from the attached human controller while
+# idle, alive and together in one party/map. Native eligibility/capacity and
+# quest scripts remain authoritative. No NPC discovery, rewards or travel.
+# Turn-in dialogs are not handled by this gate.
+Playerbots.Quest.AcceptShared.Enabled = 0
+
+# Explicit accept <quest ID> whisper/party command for the human's selected
+# nearby creature/gameobject quest giver. One native operation per bot; queued
+# intent expires after 5 seconds and rechecks authority/map/instance/interaction.
+# No accept-all, quest links, item/self givers, reward or direct AddQuest fallback.
+Playerbots.Quest.AcceptNpc.Enabled = 0
+
+# Explicit reward <quest ID> <item ID> from the selected nearby quest giver.
+# Item 0 only for quests without choice items. Ordinary completed, non-repeatable
+# quests only; native checks grant rewards. No auto-selection or forced completion.
+Playerbots.Quest.Reward.Enabled = 0
+
+# Read-only quests whisper/party report: up to 25 active quests, native status,
+# carried item counts, native kill/GO counters and reward choice item IDs.
+# No travel, automatic completion or reward; independent of mutation gates.
+Playerbots.Quest.Inspection.Enabled = 0
+
+# Explicit share <quest ID> whisper to one controlled bot in the human's party.
+# Native sharing rules apply to all recipients; submission is not acceptance.
+# No automatic share loop or automatic bot-to-bot consent.
+Playerbots.Quest.Share.Enabled = 0
+
+# Explicit drop <active quest ID> whisper to one controlled bot. Native abandon
+# rules may remove quest-provided items. No bulk cleanup or rewarded-history reset.
+# Separate destructive-operation opt-in; not required for ordinary quest play.
+Playerbots.Quest.Abandon.Enabled = 0
+
+# Narrow donor master-quest loot priority: defer native quest-class corpse items
+# while the human controller HasQuestForItem; native per-player drops are exempt.
+# No reservation/transfer, rolls,
+# broad item-usage override or quest progress edits. Default: disabled.
+Playerbots.Quest.SyncLootWithPlayer.Enabled = 0
+# Optional passive engine diagnostics: 64 records/session, 60-second retention.
+# Engine/action-method outcomes only; not spell landing or complete decision coverage.
+Playerbots.Diagnostics.Actions.Enabled = 0

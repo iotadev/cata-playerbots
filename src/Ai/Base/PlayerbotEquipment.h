@@ -3,6 +3,7 @@
 #ifndef PLAYERBOT_EQUIPMENT_H
 #define PLAYERBOT_EQUIPMENT_H
 #include "PlayerbotItemStats.h"
+#include "PlayerbotLootRollIdentity.h"
 #include <limits>
 #include <vector>
 namespace PlayerbotEquipment
@@ -28,7 +29,8 @@ inline std::optional<float> Score(PlayerbotItemStats::BaseStats const& stats, We
         stats.OwnerLevel < weights.MinimumLevel || stats.OwnerLevel > weights.MaximumLevel ||
         stats.UnsupportedStats || stats.UnsupportedEffects || stats.HasProcEffects || stats.HasUseEffects ||
         stats.HasConditionalEffects || stats.HasSockets || stats.HasItemSet ||
-        (stats.HasRandomProperties && (!stats.AffixResolved || (stats.AffixPoolUnverified && !stats.AffixInstanceVerified))))
+        (stats.HasRandomProperties && (!stats.AffixResolved || (stats.AffixPoolUnverified &&
+            !stats.AffixInstanceVerified && !stats.AffixLootVerified))))
         return {};
     double total = 0;
     for (size_t i = 0; i < stats.Values.size(); ++i)
@@ -99,5 +101,6 @@ struct Survey
     std::vector<Evaluation> Items;
 };
 void AddContexts(SharedNamedObjectContextList<UntypedValue>& values);
+Survey CompareLoot(PlayerbotAI& ai, PlayerbotLootRoll const& nativeRoll);
 }
 #endif

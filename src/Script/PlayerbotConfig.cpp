@@ -12,6 +12,8 @@
 #include "Log.h"
 #include "World.h"
 #include <atomic>
+namespace { std::atomic<bool> ActionHistoryEnabled { false }; }
+bool PlayerbotModuleActionHistoryEnabled() { return ActionHistoryEnabled.load(std::memory_order_relaxed); }
 namespace { std::atomic<bool> RestEnabled { false }; }
 namespace { std::atomic<bool> HealerSaveManaEnabled { false }; }
 namespace { std::atomic<bool> StarterGearScoreEnabled { false }; }
@@ -26,6 +28,20 @@ namespace { std::atomic<bool> LootRollEnabled { false }; }
 bool PlayerbotModuleLootRollEnabled()
 { return LootRollEnabled.load(std::memory_order_relaxed) && !PlayerbotModuleLootPassEnabled(); }
 namespace { std::atomic<bool> CorpseLootEnabled { false }; }
+namespace { std::atomic<bool> QuestShareEnabled { false }; }
+namespace { std::atomic<bool> QuestAcceptEnabled { false }; }
+namespace { std::atomic<bool> QuestRewardEnabled { false }; }
+namespace { std::atomic<bool> QuestInspectionEnabled { false }; }
+namespace { std::atomic<bool> QuestSendShareEnabled { false }; }
+namespace { std::atomic<bool> QuestAbandonEnabled { false }; }
+namespace { std::atomic<bool> QuestLootPriorityEnabled { false }; }
+bool PlayerbotModuleQuestLootPriorityEnabled() { return QuestLootPriorityEnabled.load(std::memory_order_relaxed); }
+bool PlayerbotModuleQuestAbandonEnabled() { return QuestAbandonEnabled.load(std::memory_order_relaxed); }
+bool PlayerbotModuleQuestSendShareEnabled() { return QuestSendShareEnabled.load(std::memory_order_relaxed); }
+bool PlayerbotModuleQuestInspectionEnabled() { return QuestInspectionEnabled.load(std::memory_order_relaxed); }
+bool PlayerbotModuleQuestRewardEnabled() { return QuestRewardEnabled.load(std::memory_order_relaxed); }
+bool PlayerbotModuleQuestAcceptEnabled() { return QuestAcceptEnabled.load(std::memory_order_relaxed); }
+bool PlayerbotModuleQuestShareEnabled() { return QuestShareEnabled.load(std::memory_order_relaxed); }
 namespace { std::atomic<bool> ReadyCheckEnabled { false }; }
 namespace { std::atomic<bool> ReadyCheckRebuffEnabled { false }; }
 namespace { std::atomic<bool> GroundMountEnabled { false }; }
@@ -72,6 +88,21 @@ bool PlayerbotModuleEnginePriestHealEnabled()
 
 void LoadPlayerbotModuleSettings(World& world, bool moduleConfigsValid)
 {
+    ActionHistoryEnabled.store(moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.Diagnostics.Actions.Enabled", false), std::memory_order_relaxed);
+    QuestLootPriorityEnabled.store(moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.Quest.SyncLootWithPlayer.Enabled", false),
+        std::memory_order_relaxed);
+    QuestAbandonEnabled.store(moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.Quest.Abandon.Enabled", false),
+        std::memory_order_relaxed);
+    QuestSendShareEnabled.store(moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.Quest.Share.Enabled", false),
+        std::memory_order_relaxed);
+    QuestInspectionEnabled.store(moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.Quest.Inspection.Enabled", false),
+        std::memory_order_relaxed);
+    QuestRewardEnabled.store(moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.Quest.Reward.Enabled", false),
+        std::memory_order_relaxed);
+    QuestAcceptEnabled.store(moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.Quest.AcceptNpc.Enabled", false),
+        std::memory_order_relaxed);
+    QuestShareEnabled.store(moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.Quest.AcceptShared.Enabled", false),
+        std::memory_order_relaxed);
     StarterGearScoreEnabled.store(moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.Equipment.StarterScore.Enabled", false),
         std::memory_order_relaxed);
     StarterEquipEnabled.store(PlayerbotModuleStarterGearScoreEnabled() &&

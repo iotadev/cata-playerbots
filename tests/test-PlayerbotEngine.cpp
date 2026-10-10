@@ -634,3 +634,64 @@ TEST_CASE("Playerbot strategy commands bound bytes and operation count", "[playe
     REQUIRE(engine.ChangeStrategies(std::string(250, ' ') + "?", {}).Status == Engine::StrategyChangeStatus::Rejected);
     REQUIRE(engine.ChangeStrategies("+test::qualifier", {"test::qualifier"}).Status == Engine::StrategyChangeStatus::Rejected);
 }
+namespace
+{
+class TraceAdmissionAction final : public Action
+{
+public:
+    TraceAdmissionAction(bool& useful, bool& possible, bool& returned, int& checks, int& possibleChecks, int& calls)
+        : Action(nullptr, "trace admission"), useful(useful), possible(possible), returned(returned), checks(checks), possibleChecks(possibleChecks), calls(calls) { }
+    bool isUseful() override { ++checks; return useful; }
+    bool isPossible() override { ++possibleChecks; return possible; }
+    bool Execute(Event) override { ++calls; return returned; }
+private:
+    bool& useful; bool& possible; bool& returned; int& checks; int& possibleChecks; int& calls;
+};
+class TraceOverrideListener final : public ActionExecutionListener
+{
+public:
+    bool Before(Action*, Event) override { return true; }
+    bool AllowExecution(Action*, Event) override { return true; }
+    void After(Action*, bool, Event) override { }
+    bool OverrideResult(Action*, bool, Event) override { return true; }
+};
+}
+
+TEST_CASE("Playerbot trace observes existing admission checks once and preserves execution returns", "[playerbot][engine][trace]")
+{
+    Fixture fixture;
+    bool useful = false, possible = false, returned = false;
+    int checks = 0, possibleChecks = 0, calls = 0;
+    auto* traceFactory = new NamedObjectContext<Action>();
+    traceFactory->creators["trace admission"] = [&](PlayerbotAI*) {
+        return new TraceAdmissionAction(useful, possible, returned, checks, possibleChecks, calls);
+    };
+    fixture.actions.Add(traceFactory);
+    Engine engine(nullptr, fixture.context);
+    std::vector<ActionTraceRecord> trace;
+    engine.SetTraceObserver([&](ActionTraceRecord record) { trace.push_back(std::move(record)); });
+    REQUIRE(engine.ExecuteAction("missing") == ACTION_RESULT_UNKNOWN);
+    REQUIRE(trace.back().Reason == "unknown_action");
+    REQUIRE(engine.ExecuteAction("trace admission") == ACTION_RESULT_USELESS);
+    REQUIRE(checks == 1); REQUIRE(possibleChecks == 0); REQUIRE(calls == 0);
+    REQUIRE(trace.back().Reason == "not_useful");
+    useful = true;
+    REQUIRE(engine.ExecuteAction("trace admission") == ACTION_RESULT_IMPOSSIBLE);
+    REQUIRE(checks == 2); REQUIRE(possibleChecks == 1); REQUIRE(calls == 0);
+    REQUIRE(trace.back().Reason == "not_possible");
+    possible = true;
+    REQUIRE(engine.ExecuteAction("trace admission") == ACTION_RESULT_FAILED);
+    REQUIRE(calls == 1); REQUIRE(trace.back().ActionReturn == false); REQUIRE(trace.back().EngineResult == false);
+    engine.AddActionExecutionListener(std::make_unique<TraceOverrideListener>());
+    REQUIRE(engine.ExecuteAction("trace admission") == ACTION_RESULT_OK);
+    REQUIRE(calls == 2); REQUIRE(trace.back().ActionReturn == false); REQUIRE(trace.back().EngineResult == true);
+}
+
+TEST_CASE("Playerbot observer exceptions do not alter action execution", "[playerbot][engine][trace]")
+{
+    Fixture fixture;
+    Engine engine(nullptr, fixture.context);
+    engine.SetTraceObserver([](ActionTraceRecord) { throw 1; });
+    REQUIRE(engine.ExecuteAction("primary") == ACTION_RESULT_OK);
+    REQUIRE(fixture.counts.primary == 1);
+}

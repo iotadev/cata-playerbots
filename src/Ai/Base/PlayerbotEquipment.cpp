@@ -1,6 +1,7 @@
 /* GPL v2 or later. Native ownership and donor adaptations are in PORTING.md. */
 #include "PlayerbotEquipment.h"
 #include "PlayerbotEquipmentApply.h"
+#include "PlayerbotLootAffix.h"
 #include "PlayerbotStarterGearWeights.h"
 #include "../../Script/PlayerbotConfig.h"
 #include "../../Bot/PlayerbotAI.h"
@@ -36,7 +37,8 @@ bool VerifiedAffix(Item const& instance, PlayerbotItemStats::ItemQuery query)
         if ((i < PROP_ENCHANTMENT_SLOT_0 || i > PROP_ENCHANTMENT_SLOT_4) && instance.GetEnchantmentId(EnchantmentSlot(i))) return false;
     return true; // Owned active affix, not hypothetical loot-pool membership.
 }
-std::optional<float> ReadStarterScore(Player& bot, AiObjectContext& context, std::string const& qualifier, Item const* instance = nullptr, bool fresh = false)
+std::optional<float> ReadStarterScore(Player& bot, AiObjectContext& context, std::string const& qualifier,
+    Item const* instance = nullptr, bool fresh = false, PlayerbotLootRoll const* loot = nullptr)
 {
     if (!PlayerbotModuleStarterGearScoreEnabled()) return {};
     auto query = PlayerbotItemStats::ParseQuery(qualifier);
@@ -51,6 +53,14 @@ std::optional<float> ReadStarterScore(Player& bot, AiObjectContext& context, std
     if (fresh) value->Reset();
     auto stats = value->Get();
     if (stats.OwnerLevel != bot.getLevel()) return {};
+    if (loot)
+    {
+        if (instance) return {};
+        auto verified = PlayerbotEquipment::LootQuery(*loot, item->GetRandomProperty(), item->GetRandomSuffix(),
+            GenerateEnchSuffixFactor(query.Item));
+        if (!verified || verified.Item != query.Item || verified.Property != query.Property) return {};
+        stats.AffixLootVerified = true; // Never written into the cached template value.
+    }
     if (instance)
     {
         if (instance->GetOwnerGUID() != bot.GetGUID() || !VerifiedAffix(*instance, query)) return {};
@@ -84,57 +94,61 @@ protected:
         return ReadStarterScore(*bot, *context, qualifier);
     }
 };
+PlayerbotEquipment::Survey CollectUnowned(PlayerbotAI* ai, std::string const& qualifier, PlayerbotLootRoll const* loot = nullptr)
+{
+    using namespace PlayerbotEquipment;
+    Survey result;
+    Player* bot = ai ? ai->GetBot() : nullptr;
+    AiObjectContext* context = ai ? ai->GetAiObjectContext() : nullptr;
+    auto query = PlayerbotItemStats::ParseQuery(qualifier);
+    ItemTemplate const* item = query ? sObjectMgr->GetItemTemplate(query.Item) : nullptr;
+    if (!PlayerbotModuleStarterGearScoreEnabled() || !bot || !context || !item ||
+        !bot->IsInWorld() || !bot->IsAlive() || bot->IsBeingTeleported()) return result;
+    if (!loot && !TemplateComparable(item->GetRandomProperty(), item->GetRandomSuffix(), query.Property)) return result;
+    auto score = ReadStarterScore(*bot, *context, qualifier, nullptr, loot != nullptr, loot);
+    if (!score) return result;
+    result.Owner = bot->GetGUID();
+    for (uint8 slot = EQUIPMENT_SLOT_START; slot < EQUIPMENT_SLOT_END; ++slot)
+    {
+        if (bot->FindEquipSlot(item, slot, true) != slot) continue;
+        uint16 destination = 0;
+        // Native dry-run creates/deletes a transient Item. It does not store
+        // or save that Item, and supplies native unique/skill/slot checks.
+        if (bot->CanEquipNewItem(slot, destination, query.Item, true) != EQUIP_ERR_OK ||
+            destination != uint16(uint16(INVENTORY_SLOT_BAG_0) << 8 | slot)) continue;
+        Item* existing = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
+        ItemTemplate const* oldTemplate = existing ? existing->GetTemplate() : nullptr;
+        if (existing && !oldTemplate) continue;
+        Evaluation row;
+        // Item stays empty: this is NOT an owned inventory candidate and
+        // cannot be passed to ApplyOne as permission to equip anything.
+        row.Input.Entry = query.Item;
+        row.Input.Property = query.Property;
+        row.Input.SuffixFactor = loot ? loot->SuffixFactor : 0;
+        row.Input.Slot = slot;
+        row.Input.Existing = existing ? existing->GetGUID() : ObjectGuid::Empty;
+        row.Input.ExistingEntry = existing ? existing->GetEntry() : 0;
+        row.Input.ExistingBroken = existing && existing->IsBroken();
+        bool twoHand = item->GetInventoryType() == INVTYPE_2HWEAPON;
+        row.LayoutKnown = LayoutComparable(slot, twoHand,
+            oldTemplate ? oldTemplate->GetInventoryType() == INVTYPE_2HWEAPON : twoHand,
+            bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND) != nullptr);
+        row.CandidateScore = score;
+        row.ExistingScore = existing ? ReadOwnedScore(*bot, *context, *existing, loot != nullptr) : std::optional<float>(0);
+        row.Result = Evaluate(row.CandidateScore, row.ExistingScore, !existing,
+            existing && SameVariant(query.Item, query.Property, row.Input.SuffixFactor, existing->GetEntry(),
+                existing->GetItemRandomPropertyId(), existing->GetItemSuffixFactor()), false, row.Input.ExistingBroken, row.LayoutKnown);
+        result.Items.push_back(row);
+    }
+    result.Available = true;
+    return result;
+}
 class TemplateEquipmentSurveyValue final : public CalculatedValue<PlayerbotEquipment::Survey>, public Qualified
 {
 public:
     explicit TemplateEquipmentSurveyValue(PlayerbotAI* ai) : CalculatedValue(ai, "template equipment comparisons") { }
 protected:
-    PlayerbotEquipment::Survey Calculate() override
-    {
-        using namespace PlayerbotEquipment;
-        Survey result;
-        Player* bot = botAI ? botAI->GetBot() : nullptr;
-        AiObjectContext* context = botAI ? botAI->GetAiObjectContext() : nullptr;
-        auto query = PlayerbotItemStats::ParseQuery(qualifier);
-        ItemTemplate const* item = query ? sObjectMgr->GetItemTemplate(query.Item) : nullptr;
-        if (!PlayerbotModuleStarterGearScoreEnabled() || !bot || !context || !item ||
-            !bot->IsInWorld() || !bot->IsAlive() || bot->IsBeingTeleported() ||
-            !TemplateComparable(item->GetRandomProperty(), item->GetRandomSuffix(), query.Property)) return result;
-        auto score = ReadStarterScore(*bot, *context, std::to_string(query.Item));
-        if (!score) return result;
-        result.Owner = bot->GetGUID();
-        for (uint8 slot = EQUIPMENT_SLOT_START; slot < EQUIPMENT_SLOT_END; ++slot)
-        {
-            if (bot->FindEquipSlot(item, slot, true) != slot) continue;
-            uint16 destination = 0;
-            // Native dry-run creates/deletes a transient Item. It does not store
-            // or save that Item, and supplies native unique/skill/slot checks.
-            if (bot->CanEquipNewItem(slot, destination, query.Item, true) != EQUIP_ERR_OK ||
-                destination != uint16(uint16(INVENTORY_SLOT_BAG_0) << 8 | slot)) continue;
-            Item* existing = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
-            ItemTemplate const* oldTemplate = existing ? existing->GetTemplate() : nullptr;
-            if (existing && !oldTemplate) continue;
-            Evaluation row;
-            // Item stays empty: this is NOT an owned inventory candidate and
-            // cannot be passed to ApplyOne as permission to equip anything.
-            row.Input.Entry = query.Item;
-            row.Input.Slot = slot;
-            row.Input.Existing = existing ? existing->GetGUID() : ObjectGuid::Empty;
-            row.Input.ExistingEntry = existing ? existing->GetEntry() : 0;
-            row.Input.ExistingBroken = existing && existing->IsBroken();
-            bool twoHand = item->GetInventoryType() == INVTYPE_2HWEAPON;
-            row.LayoutKnown = LayoutComparable(slot, twoHand,
-                oldTemplate ? oldTemplate->GetInventoryType() == INVTYPE_2HWEAPON : twoHand,
-                bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND) != nullptr);
-            row.CandidateScore = score;
-            row.ExistingScore = existing ? ReadOwnedScore(*bot, *context, *existing) : std::optional<float>(0);
-            row.Result = Evaluate(row.CandidateScore, row.ExistingScore, !existing,
-                existing && existing->GetEntry() == query.Item, false, row.Input.ExistingBroken, row.LayoutKnown);
-            result.Items.push_back(row);
-        }
-        result.Available = true;
-        return result;
-    }
+    PlayerbotEquipment::Survey Calculate() override { return CollectUnowned(botAI, qualifier); }
 };
 class EquipmentCandidatesValue final : public CalculatedValue<PlayerbotEquipment::Snapshot>
 {
@@ -239,7 +253,9 @@ public:
             evaluation.CandidateScore = ReadOwnedScore(*bot, *context, *item, fresh);
             evaluation.ExistingScore = existing ? ReadOwnedScore(*bot, *context, *existing, fresh) : std::optional<float>(0);
             evaluation.Result = Evaluate(evaluation.CandidateScore, evaluation.ExistingScore, !existing,
-                existing && existing->GetEntry() == item->GetEntry(), item->IsBroken(), existing && existing->IsBroken(), evaluation.LayoutKnown);
+                existing && SameVariant(item->GetEntry(), item->GetItemRandomPropertyId(), item->GetItemSuffixFactor(),
+                    existing->GetEntry(), existing->GetItemRandomPropertyId(), existing->GetItemSuffixFactor()),
+                item->IsBroken(), existing && existing->IsBroken(), evaluation.LayoutKnown);
             result.Items.push_back(evaluation);
         }
         result.Available = true; // Read-only classification, never a queued equip request.
@@ -248,6 +264,17 @@ public:
 protected:
     PlayerbotEquipment::Survey Calculate() override { return Collect(false); }
 };
+}
+PlayerbotEquipment::Survey PlayerbotEquipment::CompareLoot(PlayerbotAI& ai, PlayerbotLootRoll const& roll)
+{
+    Player* bot = ai.GetBot();
+    ItemTemplate const* item = sObjectMgr->GetItemTemplate(roll.Entry);
+    if (!bot || !item || bot->GetMapId() != roll.Map || bot->GetInstanceId() != roll.Instance) return {};
+    auto query = LootQuery(roll, item->GetRandomProperty(), item->GetRandomSuffix(), GenerateEnchSuffixFactor(roll.Entry));
+    if (!query) return {};
+    std::string qualifier = std::to_string(query.Item);
+    if (query.Property) qualifier += "," + std::to_string(query.Property);
+    return CollectUnowned(&ai, qualifier, &roll);
 }
 PlayerbotEquipmentApply::Result PlayerbotEquipmentApply::ApplyOne(WorldSession& session, PlayerbotAI& ai)
 {
