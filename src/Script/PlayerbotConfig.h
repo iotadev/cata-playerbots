@@ -6,9 +6,14 @@
 #define PLAYERBOTS_MODULE_CONFIG_H
 bool PlayerbotModuleActionHistoryEnabled();
 bool PlayerbotModuleRepairEnabled();
+bool PlayerbotModulePurchaseEnabled();
+bool PlayerbotModuleSellEnabled();
+bool PlayerbotModuleTrainingEnabled();
 
 bool PlayerbotModuleEngineWarriorBuffEnabled();
 bool PlayerbotModuleEngineWarriorCombatEnabled();
+bool PlayerbotModuleEngineRogueCombatEnabled();
+bool PlayerbotModuleEngineHunterCombatEnabled();
 bool PlayerbotModuleEngineMageCombatEnabled();
 bool PlayerbotModuleEnginePriestHealEnabled();
 bool PlayerbotModuleHealerSaveManaEnabled();

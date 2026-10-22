@@ -13,6 +13,9 @@
 #include "PlayerbotSecurity.h"
 #include "PlayerbotSessionHooks.h"
 #include "PlayerbotConfig.h"
+#include "../Ai/Base/PlayerbotPurchase.h"
+#include "../Ai/Base/PlayerbotVendorSale.h"
+#include "../Ai/Base/PlayerbotTraining.h"
 #include "Timer.h"
 #include "Chat.h"
 #include "Group.h"
@@ -24,20 +27,27 @@
 
 namespace
 {
-void RequestRepair(Player& sender, ObjectGuid botGuid)
+void RequestMaintenance(Player& sender, ObjectGuid botGuid, uint32 item = 0, bool vendorBuy = false, bool sell = false, bool train = false)
 {
     ChatHandler reply(sender.GetSession());
     WorldSession* session = sWorld->FindServerOriginPlayerbot(botGuid);
     Player* bot = session ? session->GetPlayer() : nullptr;
     ObjectGuid npc = sender.GetTarget();
     uint32 requester = sender.GetGUID().GetCounter();
-    if (!PlayerbotModuleRepairEnabled()) { reply.SendSysMessage("Playerbot repair is disabled."); return; }
+    bool purchase = item || vendorBuy;
+    if (!(train ? PlayerbotModuleTrainingEnabled() : sell ? PlayerbotModuleSellEnabled() : purchase ? PlayerbotModulePurchaseEnabled() : PlayerbotModuleRepairEnabled()))
+    { reply.SendSysMessage("That Playerbot maintenance operation is disabled."); return; }
     if (!bot || !bot->IsInWorld() || !sender.IsInWorld() || sender.GetMap() != bot->GetMap() ||
         !npc.IsCreature() || !PlayerbotSecurity(*bot).CheckLevelFor(PLAYERBOT_SECURITY_ALLOW_ALL, sender) ||
         (session->GetServerOriginFollowTargetGuidLow() != requester && session->GetServerOriginPartyControllerGuidLow() != requester))
-    { reply.SendSysMessage("Select a nearby repair NPC with your controlled bot on the same map/instance."); return; }
-    reply.SendSysMessage(session->RequestPlayerbotRepair(requester, npc.GetRawValue(), sender.GetMapId(), sender.GetInstanceId()) ?
-        "Repair requested using the bot's own money; wait for the native result." : "Repair request busy or disabled.");
+    { reply.SendSysMessage("Select a nearby vendor/repair/class-trainer NPC with your controlled bot on the same map/instance."); return; }
+    bool queued = train ? session->RequestPlayerbotTrain(requester, npc.GetRawValue(), sender.GetMapId(), sender.GetInstanceId(), item) :
+        sell ? session->RequestPlayerbotSell(requester, npc.GetRawValue(), sender.GetMapId(), sender.GetInstanceId()) :
+        purchase ? session->RequestPlayerbotPurchase(requester, npc.GetRawValue(), sender.GetMapId(), sender.GetInstanceId(), item) :
+        session->RequestPlayerbotRepair(requester, npc.GetRawValue(), sender.GetMapId(), sender.GetInstanceId());
+    reply.SendSysMessage(queued ? train ? "Class trainer request queued; wait for the offer list or native result." :
+        sell ? "Qualified gray-junk sale requested; wait for the native result." :
+        "Maintenance requested using the bot's own money; wait for the native result." : "Maintenance request busy or disabled.");
 }
 void RequestQuestCommand(Player& sender, ObjectGuid botGuid, uint32 quest,
     PlayerbotQuestAccept::Operation action = PlayerbotQuestAccept::Operation::Accept, uint32 item = 0)
@@ -123,7 +133,23 @@ public:
 
         std::string command = NormalizePlayerbotControlChat(message);
         ChatHandler reply(sender->GetSession());
-        if (command == "repair") { RequestRepair(*sender, receiver->GetGUID()); return; }
+        if (PlayerbotTraining::Recognizes(command))
+        {
+            auto spell = PlayerbotTraining::ParseRequest(command);
+            if (spell) RequestMaintenance(*sender, receiver->GetGUID(), *spell, false, false, true);
+            else reply.SendSysMessage("Select a nearby class trainer: trainer (offers), trainer learn (bounded batch), or train <ID>.");
+            return;
+        }
+        if (command == "repair") { RequestMaintenance(*sender, receiver->GetGUID()); return; }
+        if (PlayerbotVendorSale::Command(command)) { RequestMaintenance(*sender, receiver->GetGUID(), 0, false, true); return; }
+        if (PlayerbotPurchase::Recognizes(command))
+        {
+            uint32 item = PlayerbotPurchase::Parse(command);
+            bool vendorBuy = PlayerbotPurchase::VendorCommand(command);
+            if (item || vendorBuy) RequestMaintenance(*sender, receiver->GetGUID(), item, vendorBuy);
+            else reply.SendSysMessage("Select a nearby vendor: buy <numeric food/drink/recovery item ID> or buy vendor.");
+            return;
+        }
         if (auto inspection = PlayerbotQuestAccept::ParseInspection(command))
         { RequestQuestCommand(*sender, receiver->GetGUID(), 0, *inspection); return; }
         if (PlayerbotQuestAccept::RecognizesDrop(command))
@@ -217,6 +243,16 @@ public:
         bool strategy = PlayerbotStrategyControl::Recognizes(command);
         bool gear = IsPlayerbotGearInspection(command);
         bool repair = command == "repair";
+        bool train = PlayerbotTraining::Recognizes(command);
+        auto trainSpell = train ? PlayerbotTraining::ParseRequest(command) : std::nullopt;
+        if (train && !trainSpell)
+        { ChatHandler(sender->GetSession()).SendSysMessage("Select a nearby class trainer: trainer, trainer learn, or train <ID>."); return; }
+        bool sell = PlayerbotVendorSale::Command(command);
+        bool buy = PlayerbotPurchase::Recognizes(command);
+        uint32 buyItem = buy ? PlayerbotPurchase::Parse(command) : 0;
+        bool vendorBuy = PlayerbotPurchase::VendorCommand(command);
+        if (buy && !buyItem && !vendorBuy)
+        { ChatHandler(sender->GetSession()).SendSysMessage("Select a nearby vendor: buy <numeric food/drink/recovery item ID> or buy vendor."); return; }
         bool applyGear = IsPlayerbotGearApply(command);
         bool acceptQuest = PlayerbotQuestAccept::Recognizes(command);
         auto inspectQuests = PlayerbotQuestAccept::ParseInspection(command);
@@ -228,7 +264,7 @@ public:
         uint32 quest = acceptArgs ? acceptArgs->Quest : 0;
         if (acceptQuest && !acceptArgs)
         { ChatHandler(sender->GetSession()).SendSysMessage("Select a nearby quest giver and use accept <numeric quest ID>."); return; }
-        if (!repair && !inspectQuests && !rewardQuest && !acceptQuest && !applyGear && !gear && !range && !strategy && !ParsePlayerbotControlChat(command, action))
+        if (!train && !sell && !buy && !repair && !inspectQuests && !rewardQuest && !acceptQuest && !applyGear && !gear && !range && !strategy && !ParsePlayerbotControlChat(command, action))
             return;
         if (strategy && !PlayerbotStrategyControl::Parse(command))
         {
@@ -251,7 +287,8 @@ public:
                     group->GetMemberGroup(entry.Guid)))
                 continue;
             // Dispatch independently rechecks native identity and full control.
-            if (repair) { RequestRepair(*sender, entry.Guid); continue; }
+            if (train) { RequestMaintenance(*sender, entry.Guid, *trainSpell, false, false, true); continue; }
+            if (repair || buy || sell) { RequestMaintenance(*sender, entry.Guid, buyItem, vendorBuy, sell); continue; }
             if (gear) { ReportGear(*sender, entry.Guid); continue; }
             if (applyGear) { RequestGearApply(*sender, entry.Guid); continue; }
             if (acceptQuest) { RequestQuestCommand(*sender, entry.Guid, quest, acceptArgs->Action); continue; }

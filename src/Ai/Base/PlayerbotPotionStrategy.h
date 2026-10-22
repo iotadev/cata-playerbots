@@ -6,6 +6,7 @@
 #include <cmath>
 
 class Item;
+struct ItemTemplate;
 class SpellInfo;
 namespace PlayerbotPotion
 {
@@ -53,6 +54,7 @@ public:
 };
 // Shared carried-stock classification. It deliberately does not test current cooldowns or need.
 SpellInfo const* RecoverySpell(Item const& item, Kind kind);
+SpellInfo const* RecoverySpell(ItemTemplate const& item, Kind kind);
 void AddContexts(SharedNamedObjectContextList<Strategy>& strategies,
     SharedNamedObjectContextList<Action>& actions, SharedNamedObjectContextList<Trigger>& triggers);
 }

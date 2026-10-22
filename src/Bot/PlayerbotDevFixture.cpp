@@ -64,7 +64,7 @@ void SetEnabled(bool value)
 bool Request(ObjectGuid guid, Role role)
 {
     std::lock_guard<std::mutex> lock(mutex);
-    if (!enabled || guid.IsEmpty() || pending.count(guid) || pending.size() >= 4) return false;
+    if (!enabled || !ClassFor(role) || guid.IsEmpty() || pending.count(guid) || pending.size() >= 6) return false;
     pending.emplace(guid, RequestData{role, getMSTime()});
     return true;
 }
@@ -87,8 +87,9 @@ void Process(Player& bot)
         role = request.role;
         prepareRoll = rollFixtureEnabled;
     }
-    uint8 playerClass = role == Role::Frost ? CLASS_MAGE : role == Role::Holy ? CLASS_PRIEST : CLASS_WARRIOR;
-    uint8 tab = role == Role::Arms ? 0 : role == Role::Holy ? 1 : 2;
+    uint8 playerClass = ClassFor(role);
+    uint8 tab = TabFor(role);
+    if (!playerClass || tab > 2) return;
     uint32 const* tabs = sDBCManager.GetTalentTabPages(playerClass);
     uint32 tree = tabs ? tabs[tab] : 0;
     if (!bot.GetSession()->IsServerOrigin() || bot.getClass() != playerClass || bot.getLevel() != 20 ||
@@ -117,7 +118,10 @@ void Process(Player& bot)
                     progressed = true;
     }
     std::vector<uint32> spells = playerClass == CLASS_WARRIOR ? std::vector<uint32>{201,202,9116,8737,71,2457,6673,772,355,78,34428} :
-        playerClass == CLASS_MAGE ? std::vector<uint32>{227,133,116,2136,122} : std::vector<uint32>{227,17,2061,2050,139,21562};
+        playerClass == CLASS_MAGE ? std::vector<uint32>{227,133,116,2136,122} :
+        playerClass == CLASS_ROGUE ? std::vector<uint32>{201,674,1752,2098,5171,1943,1766} :
+        playerClass == CLASS_HUNTER ? std::vector<uint32>{201,264,75,1978,3044,56641,883,982,136} :
+        std::vector<uint32>{227,17,2061,2050,139,21562};
     bool ready = bot.GetFreeTalentPoints() == 0;
     for (uint32 spell : spells)
     {
@@ -137,6 +141,14 @@ void Process(Player& bot)
         ready = Equip(bot, EQUIPMENT_SLOT_CHEST, 2866) && ready;
         ready = Equip(bot, EQUIPMENT_SLOT_WRISTS, 2867) && ready;
         ready = Equip(bot, EQUIPMENT_SLOT_HANDS, 3472) && ready;
+    }
+    else if (playerClass == CLASS_ROGUE || playerClass == CLASS_HUNTER)
+    {
+        ready = Equip(bot, EQUIPMENT_SLOT_MAINHAND, 4765) && ready;
+        if (playerClass == CLASS_ROGUE) ready = Equip(bot, EQUIPMENT_SLOT_OFFHAND, 4765) && ready;
+        else ready = Equip(bot, EQUIPMENT_SLOT_RANGED, 3039) && ready;
+        ready = Equip(bot, EQUIPMENT_SLOT_CHEST, 2300) && ready;
+        // No mana supplies, ammunition or pet creation in the Cata DPS fixture.
     }
     else
     {

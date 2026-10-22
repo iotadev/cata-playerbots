@@ -5,6 +5,7 @@
 #include "../../Bot/PlayerbotAI.h"
 #include "MotionMaster.h"
 #include "Player.h"
+#include "Creature.h"
 #include "PointMovementGenerator.h"
 #include "../../Script/PlayerbotConfig.h"
 namespace

@@ -14,6 +14,12 @@
 #include <atomic>
 namespace { std::atomic<bool> ActionHistoryEnabled { false }; }
 namespace { std::atomic<bool> RepairEnabled { false }; }
+namespace { std::atomic<bool> PurchaseEnabled { false }; }
+namespace { std::atomic<bool> SellEnabled { false }; }
+namespace { std::atomic<bool> TrainingEnabled { false }; }
+bool PlayerbotModuleTrainingEnabled() { return TrainingEnabled.load(std::memory_order_relaxed); }
+bool PlayerbotModuleSellEnabled() { return SellEnabled.load(std::memory_order_relaxed); }
+bool PlayerbotModulePurchaseEnabled() { return PurchaseEnabled.load(std::memory_order_relaxed); }
 bool PlayerbotModuleRepairEnabled() { return RepairEnabled.load(std::memory_order_relaxed); }
 bool PlayerbotModuleActionHistoryEnabled() { return ActionHistoryEnabled.load(std::memory_order_relaxed); }
 namespace { std::atomic<bool> RestEnabled { false }; }
@@ -78,6 +84,15 @@ bool PlayerbotModuleEngineMageCombatEnabled()
     return sConfigMgr->GetBoolDefault("Playerbots.Dev.EngineMageCombat", false);
 }
 
+bool PlayerbotModuleEngineRogueCombatEnabled()
+{
+    return sConfigMgr->GetBoolDefault("Playerbots.Dev.EngineRogueCombat", false);
+}
+bool PlayerbotModuleEngineHunterCombatEnabled()
+{
+    return sConfigMgr->GetBoolDefault("Playerbots.Dev.EngineHunterCombat", false);
+}
+
 bool PlayerbotModuleEnginePartyBuffEnabled()
 {
     return sConfigMgr->GetBoolDefault("Playerbots.Dev.EnginePartyBuff", false);
@@ -102,6 +117,9 @@ void LoadPlayerbotModuleSettings(World& world, bool moduleConfigsValid)
     QuestRewardEnabled.store(moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.Quest.Reward.Enabled", false),
         std::memory_order_relaxed);
     RepairEnabled.store(moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.Maintenance.Repair.Enabled", false), std::memory_order_relaxed);
+    PurchaseEnabled.store(moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.Maintenance.Buy.Enabled", false), std::memory_order_relaxed);
+    SellEnabled.store(moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.Maintenance.Sell.Enabled", false), std::memory_order_relaxed);
+    TrainingEnabled.store(moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.Maintenance.Train.Enabled", false), std::memory_order_relaxed);
     QuestAcceptEnabled.store(moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.Quest.AcceptNpc.Enabled", false),
         std::memory_order_relaxed);
     QuestShareEnabled.store(moduleConfigsValid && sConfigMgr->GetBoolDefault("Playerbots.Quest.AcceptShared.Enabled", false),

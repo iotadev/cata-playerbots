@@ -1,6 +1,7 @@
 /* GPL v2 or later. Native ownership and donor adaptations are in PORTING.md. */
 #include "PlayerbotEquipment.h"
 #include "PlayerbotEquipmentApply.h"
+#include "PlayerbotBagUsage.h"
 #include "PlayerbotLootAffix.h"
 #include "PlayerbotStarterGearWeights.h"
 #include "../../Script/PlayerbotConfig.h"
@@ -310,7 +311,15 @@ PlayerbotEquipmentApply::Result PlayerbotEquipmentApply::ApplyOne(WorldSession& 
         if (auto* value = ai.GetAiObjectContext()->GetValue<PlayerbotEquipment::Survey>("starter equipment comparisons")) value->Reset();
         return Result::Confirmed; // At most one native change per explicit request.
     }
-    return Result::NoChange;
+    // Bag fill is a fallback after gear, under the same explicit request/control/state gates.
+    auto bag = PlayerbotBagUsage::ApplyOne(session);
+    if (bag == PlayerbotBagUsage::ApplyResult::Confirmed)
+    {
+        if (auto* value = ai.GetAiObjectContext()->GetValue<PlayerbotEquipment::Snapshot>("equipment candidates")) value->Reset();
+        if (auto* value = ai.GetAiObjectContext()->GetValue<PlayerbotEquipment::Survey>("starter equipment comparisons")) value->Reset();
+        return Result::Confirmed;
+    }
+    return bag == PlayerbotBagUsage::ApplyResult::Rejected ? Result::Rejected : Result::NoChange;
 }
 void PlayerbotEquipment::AddContexts(SharedNamedObjectContextList<UntypedValue>& values)
 {

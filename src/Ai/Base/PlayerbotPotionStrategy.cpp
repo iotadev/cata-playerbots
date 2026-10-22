@@ -37,6 +37,11 @@ bool Ready(PlayerbotAI* ai, Kind kind)
 SpellInfo const* PlayerbotPotion::RecoverySpell(Item const& item, Kind kind)
 {
     ItemTemplate const* proto = item.GetTemplate();
+    return proto ? RecoverySpell(*proto, kind) : nullptr;
+}
+SpellInfo const* PlayerbotPotion::RecoverySpell(ItemTemplate const& item, Kind kind)
+{
+    ItemTemplate const* proto = &item;
     if (!proto || proto->GetClass() != ITEM_CLASS_CONSUMABLE) return nullptr;
     for (ItemEffect const& effect : proto->Effects)
         if (effect.SpellID && effect.Trigger == ITEM_SPELLTRIGGER_ON_USE)

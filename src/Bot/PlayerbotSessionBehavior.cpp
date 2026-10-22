@@ -40,6 +40,8 @@
 #include "WorldPacket.h"
 #include "../Ai/Base/PlayerbotItemUsage.h"
 #include "WarriorAiObjectContext.h"
+#include "RogueAiObjectContext.h"
+#include "HunterAiObjectContext.h"
 #include "Timer.h"
 namespace
 {
@@ -47,7 +49,8 @@ bool PassiveEngineEnabled(PlayerbotAI const& ai)
 {
     Player* bot = ai.GetBot();
     return ai.Rebuff().IsPending(getMSTime()) || PlayerbotModuleRestEnabled() || PlayerbotModuleMageArmorEnabled() || PlayerbotModuleCorpseLootEnabled() ||
-        (bot && bot->getClass() == CLASS_MAGE && PlayerbotModuleEngineMageCombatEnabled());
+        (bot && bot->getClass() == CLASS_MAGE && PlayerbotModuleEngineMageCombatEnabled()) ||
+        (bot && bot->getClass() == CLASS_HUNTER && PlayerbotModuleEngineHunterCombatEnabled());
 }
 }
 PlayerbotSessionBehavior::PlayerbotSessionBehavior(WorldSession& session)
@@ -59,7 +62,8 @@ std::unique_ptr<PlayerbotSessionHooks> CreatePlayerbotSessionHooks(WorldSession&
 }
 bool PlayerbotModuleSupportsClass(uint8 playerClass)
 {
-    return playerClass == CLASS_WARRIOR || playerClass == CLASS_MAGE || playerClass == CLASS_PRIEST;
+    return playerClass == CLASS_WARRIOR || playerClass == CLASS_MAGE || playerClass == CLASS_PRIEST ||
+        playerClass == CLASS_ROGUE || playerClass == CLASS_HUNTER;
 }
 PlayerbotContextState PlayerbotSessionBehavior::GetContextStateForMap() const
 {
@@ -106,6 +110,19 @@ void PlayerbotSessionBehavior::UpdateMap(uint32 diff)
                 _engine = &_stateEngines->Active();
                 _engine->AddStrategy("nc");
             }
+            else if (bot->getClass() == CLASS_HUNTER)
+            {
+                _aiContext = std::make_unique<HunterAiObjectContext>(&_ai);
+                _stateEngines = std::make_unique<StateEngines>(&_ai, *_aiContext);
+                _engine = &_stateEngines->Active();
+                _engine->AddStrategy("pet");
+            }
+            else if (bot->getClass() == CLASS_ROGUE)
+            {
+                _aiContext = std::make_unique<RogueAiObjectContext>(&_ai);
+                _stateEngines = std::make_unique<StateEngines>(&_ai, *_aiContext);
+                _engine = &_stateEngines->Active();
+            }
             else if (bot->getClass() == CLASS_MAGE)
             {
                 _aiContext = std::make_unique<MageAiObjectContext>(&_ai);
@@ -149,7 +166,8 @@ void PlayerbotSessionBehavior::UpdateMap(uint32 diff)
             if (!_combatDefaultsInitialized || !PlayerbotModuleStrategyControlEnabled())
             {
                 PlayerbotStrategyControl::RestoreCombatDefaults(combat,
-                    bot->getClass() == CLASS_MAGE || bot->getClass() == CLASS_PRIEST);
+                    bot->getClass() == CLASS_MAGE || bot->getClass() == CLASS_PRIEST ||
+                    bot->getClass() == CLASS_ROGUE || bot->getClass() == CLASS_HUNTER);
                 _combatDefaultsInitialized = true;
             }
             if (bot->getClass() == CLASS_MAGE || bot->getClass() == CLASS_PRIEST)
@@ -257,7 +275,9 @@ void PlayerbotSessionBehavior::UpdateMap(uint32 diff)
         if (requester && requester->GetSession())
             ChatHandler(requester->GetSession()).PSendSysMessage("Playerbot %s: gear apply %s.", bot->GetName().c_str(),
                 result == PlayerbotEquipmentApply::Result::Confirmed ? "confirmed one native slot change" :
-                result == PlayerbotEquipmentApply::Result::NoChange ? "found no qualified safe change" : "rejected; authority, state or inventory was not eligible");
+                result == PlayerbotEquipmentApply::Result::NoChange ? "found no qualified safe change" :
+                result == PlayerbotEquipmentApply::Result::Rejected ? "could not confirm a native change; inspect inventory before retrying" :
+                "rejected; authority or state was not eligible");
         if (bot) TC_LOG_INFO("server", "PB-EQUIP: %s result=%u", bot->GetName().c_str(), uint32(result));
     }
     if (auto request = _strategyCommands.Take(getMSTime()))
@@ -360,6 +380,7 @@ void PlayerbotSessionBehavior::UpdateMap(uint32 diff)
         }
     }
     UpdateServerOriginCombat(diff);
+    PlayerbotHunter::UpdatePet(_ai, _serverOriginAttacking.load());
     SelectEngineState();
     if (auto request = _readyChecks.TakeRequest(getMSTime()))
     {
@@ -611,6 +632,9 @@ void PlayerbotSessionBehavior::SelectEngineState()
 void PlayerbotSessionBehavior::UpdateWorld()
 {
     PlayerbotRepair::Update(_session, _repairCommands);
+    PlayerbotPurchase::Update(_session, _purchaseCommands);
+    PlayerbotVendorSale::Update(_session, _sellCommands);
+    PlayerbotTraining::Update(_session, _trainingCommands);
     PlayerbotQuestAccept::Update(_session, _questAcceptCommands);
     PlayerbotQuestShare::Update(_session, _questShareAttempt);
     if (!PlayerbotModuleLootRollEnabled()) _rollCommands.Cancel();
@@ -771,6 +795,10 @@ bool PlayerbotSessionBehavior::RequestPlayerbotRepair(uint32 requesterGuidLow, u
 {
     return PlayerbotModuleRepairEnabled() && _repairCommands.Post(requesterGuidLow, npc, map, instance, getMSTime());
 }
+bool PlayerbotSessionBehavior::RequestPlayerbotPurchase(uint32 requesterGuidLow, uint64 npc, uint32 map, uint32 instance, uint32 item)
+{
+    return PlayerbotModulePurchaseEnabled() && _purchaseCommands.Post(requesterGuidLow, npc, map, instance, getMSTime(), item);
+}
 bool PlayerbotSessionBehavior::RequestPlayerbotQuestCommand(uint32 requesterGuidLow, uint32 quest, uint64 giver, uint32 map, uint32 instance, uint32 operation, uint32 item)
 {
     auto action = static_cast<PlayerbotQuestAccept::Operation>(operation);
@@ -780,6 +808,15 @@ bool PlayerbotSessionBehavior::RequestPlayerbotQuestCommand(uint32 requesterGuid
         action == PlayerbotQuestAccept::Operation::Share ? PlayerbotModuleQuestSendShareEnabled() :
         action == PlayerbotQuestAccept::Operation::Abandon && PlayerbotModuleQuestAbandonEnabled();
     return enabled && _questAcceptCommands.Post(requesterGuidLow, quest, giver, map, instance, getMSTime(), action, item);
+}
+bool PlayerbotSessionBehavior::RequestPlayerbotTrain(uint32 requesterGuidLow, uint64 npc, uint32 map, uint32 instance, uint32 spell)
+{
+    return PlayerbotModuleTrainingEnabled() &&
+        _trainingCommands.Post(requesterGuidLow, npc, map, instance, getMSTime(), spell);
+}
+bool PlayerbotSessionBehavior::RequestPlayerbotSell(uint32 requesterGuidLow, uint64 npc, uint32 map, uint32 instance)
+{
+    return PlayerbotModuleSellEnabled() && _sellCommands.Post(requesterGuidLow, npc, map, instance, getMSTime());
 }
 bool PlayerbotSessionBehavior::RequestPlayerbotStrategy(uint32 requesterGuidLow, std::string const& command,
     std::string const& token, std::string const& target, uint64 batch, PlayerbotStrategyBinding const& binding)
@@ -1226,6 +1263,7 @@ void PlayerbotSessionBehavior::UpdateServerOriginCombat(uint32 diff)
         _serverOriginActionCheckTimer = 0;
         _serverOriginMeleeStance = 0;
         _player->AttackStop();
+        if (_player->getClass() == CLASS_HUNTER) _player->InterruptSpell(CURRENT_AUTOREPEAT_SPELL);
         _player->GetMotionMaster()->Clear(MOTION_SLOT_ACTIVE);
         _player->StopMoving();
         if (_player->getClass() == CLASS_PRIEST)
@@ -1255,10 +1293,13 @@ void PlayerbotSessionBehavior::UpdateServerOriginCombat(uint32 diff)
     auto beginAttack = [this, _player, &cease](Creature* target, bool autoAssisted)
     {
         bool priest = _player->getClass() == CLASS_PRIEST;
-        bool ranged = _player->getClass() == CLASS_MAGE;
+        bool ranged = _player->getClass() == CLASS_MAGE || _player->getClass() == CLASS_HUNTER;
+        if (_player->getClass() == CLASS_HUNTER && !PlayerbotModuleEngineHunterCombatEnabled()) return false;
         if (priest && !PlayerbotModuleEnginePriestHealEnabled())
             return false;
-        if (!priest && !ranged && _player->getClass() != CLASS_WARRIOR)
+        if (!priest && !ranged && _player->getClass() != CLASS_WARRIOR && _player->getClass() != CLASS_ROGUE)
+            return false;
+        if (_player->getClass() == CLASS_ROGUE && !PlayerbotModuleEngineRogueCombatEnabled())
             return false;
         cease();
         // Donor AttackAction faces before native attack/chase submission.
@@ -1295,9 +1336,9 @@ void PlayerbotSessionBehavior::UpdateServerOriginCombat(uint32 diff)
         TC_LOG_INFO("server", "PB-02: %s %s %s", _player->GetName().c_str(), autoAssisted ? "auto-assisting" : "attacking", target->GetName().c_str());
         if (priest)
             PlayerbotPriest::LogKnownAbilities(*_player);
-        else if (ranged)
+        else if (_player->getClass() == CLASS_MAGE)
             PlayerbotMage::LogKnownAbilities(*_player);
-        else
+        else if (_player->getClass() == CLASS_WARRIOR)
             PlayerbotWarrior::LogKnownAbilities(*_player);
         return true;
     };
@@ -1339,7 +1380,8 @@ void PlayerbotSessionBehavior::UpdateServerOriginCombat(uint32 diff)
             Creature* target = selected ? selected->ToCreature() : nullptr;
             char const* fallback = _engine ? PlayerbotTargetSelection::FallbackValue(_player->getClass(),
                 _player->GetPrimaryTalentTree(_player->GetActiveSpec()), PlayerbotModuleEngineWarriorCombatEnabled(),
-                PlayerbotModuleEngineMageCombatEnabled(), PlayerbotModuleEnginePriestHealEnabled()) : nullptr;
+                PlayerbotModuleEngineMageCombatEnabled(), PlayerbotModuleEnginePriestHealEnabled(),
+                PlayerbotModuleEngineRogueCombatEnabled(), PlayerbotModuleEngineHunterCombatEnabled()) : nullptr;
             bool tank = fallback && std::string_view(fallback) == "tank target";
             if (fallback && (tank || !validTarget(owner, target) || !PlayerbotTargetSelection::IsEngagedWithAttachedParty(*_player, *owner, *target)))
             {
@@ -1437,10 +1479,12 @@ void PlayerbotSessionBehavior::UpdateServerOriginCombat(uint32 diff)
 
         bool supportedDamageRole =
             (_player->getClass() == CLASS_MAGE && PlayerbotModuleEngineMageCombatEnabled()) ||
-            (_player->getClass() == CLASS_WARRIOR && PlayerbotModuleEngineWarriorCombatEnabled());
+            (_player->getClass() == CLASS_WARRIOR && PlayerbotModuleEngineWarriorCombatEnabled()) ||
+            (_player->getClass() == CLASS_ROGUE && PlayerbotModuleEngineRogueCombatEnabled()) ||
+            (_player->getClass() == CLASS_HUNTER && PlayerbotModuleEngineHunterCombatEnabled());
         if (_engine && PlayerbotTargetSelection::ShouldReassessDpsTarget(
             _serverOriginAutoAssistedAttack, supportedDamageRole,
-            PlayerbotRoles::IsTankOrMainTank(*_player), _player->IsNonMeleeSpellCast(false)))
+            PlayerbotRoles::IsTankOrMainTank(*_player), _player->IsNonMeleeSpellCast(false, false, _player->getClass() == CLASS_HUNTER)))
         {
             // Donor DpsAssistStrategy / NotDpsTargetActiveTrigger: adopt the
             // newly ranked target rather than waiting for the old one to die.
@@ -1489,6 +1533,14 @@ void PlayerbotSessionBehavior::UpdateServerOriginCombat(uint32 diff)
             }
         }
 
+        if (_player->getClass() == CLASS_HUNTER)
+        {
+            if (_ai.NeedsSpellChaseRefresh() && PlayerbotCombatMovement::RefreshSpellChase(_ai))
+                _ai.ClearSpellChaseRefresh();
+            if (_engine && PlayerbotModuleEngineHunterCombatEnabled()) TickEngine(true);
+            else cease();
+            return;
+        }
         if (_player->getClass() == CLASS_MAGE)
         {
             if (_ai.NeedsSpellChaseRefresh() && PlayerbotCombatMovement::RefreshSpellChase(_ai))
@@ -1520,6 +1572,12 @@ void PlayerbotSessionBehavior::UpdateServerOriginCombat(uint32 diff)
             _serverOriginMeleeStance = stance;
         }
 
+        if (_player->getClass() == CLASS_ROGUE)
+        {
+            if (_engine && PlayerbotModuleEngineRogueCombatEnabled()) TickEngine(true);
+            else cease(); // No Warrior fallback or attack loop after disabling the Rogue gate.
+            return;
+        }
         if (_engine && PlayerbotModuleEngineWarriorCombatEnabled())
         {
             uint32 primaryTree = _player->GetPrimaryTalentTree(_player->GetActiveSpec());

@@ -8,11 +8,15 @@
 #include <charconv>
 #include <cmath>
 #include <string_view>
+class Player;
 namespace PlayerbotConsumable
 {
 enum class Type { None, Food, Drink, HealingPotion, ManaPotion, Bandage };
+Type ConsumableType(ItemTemplate const& item, bool hasMana);
 // Unsupported is not donor ITEM_USAGE_NONE: other item-usage branches are unported.
 enum class Usage { Unsupported, None, Use, Keep };
+// Caller must own native inventory access; no cached AI context is consulted.
+Usage StockUsageFor(Player const& bot, ItemTemplate const& item);
 inline uint32 ParseItem(std::string_view text)
 {
     if (text.empty() || text.size() > 10) return 0;

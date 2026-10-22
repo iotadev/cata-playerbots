@@ -2,12 +2,16 @@
 #include "PlayerbotItemUsage.h"
 #include "PlayerbotQuestItem.h"
 #include "PlayerbotQuestReward.h"
+#include "PlayerbotProfessionItem.h"
+#include "PlayerbotDisenchantItem.h"
+#include "PlayerbotBagUsage.h"
 #include "../../Bot/PlayerbotAI.h"
 #include "ObjectMgr.h"
 #include "Player.h"
 #include "QuestDef.h"
 #include "SpellInfo.h"
 #include "SpellMgr.h"
+#include "WorldSession.h"
 
 bool PlayerbotQuestItem::Useful(Player const& player, ItemTemplate const& item)
 {
@@ -56,6 +60,12 @@ protected:
         auto query = PlayerbotItemStats::ParseQuery(qualifier);
         ItemTemplate const* item = query ? sObjectMgr->GetItemTemplate(query.Item) : nullptr;
         if (!bot || !context || !item || !bot->IsInWorld() || bot->IsBeingTeleported()) return {};
+        Player* controller = botAI->GetController();
+        if (controller && controller->GetSession() && !controller->GetSession()->IsServerOrigin() &&
+            PlayerbotProfessionItem::Useful(*bot, *item))
+            return {Usage::Skill, Scope::ProfessionRetention};
+        if (!query.Property && PlayerbotBagUsage::Useful(*bot, *item))
+            return {Usage::Equip, Scope::BagCapacity};
         if (item->GetClass() == ITEM_CLASS_CONSUMABLE)
         {
             if (query.Property) return {}; // Stock reader does not qualify affixed consumables.
@@ -70,11 +80,14 @@ protected:
             if (!value) return {};
             auto survey = value->Get();
             if (!survey.Available || survey.Owner != bot->GetGUID()) return {};
-            return {CarriedEquipment(survey, query.Item, query.Property), Scope::CarriedEquipment};
+            Usage usage = CarriedEquipment(survey, query.Item, query.Property);
+            if (usage == Usage::Keep && PlayerbotDisenchantItem::Useful(*bot, query.Item, query.Property, survey))
+                return {Usage::Disenchant, Scope::OwnedDisenchant};
+            return {usage, Scope::CarriedEquipment};
         }
         if (!query.Property && PlayerbotQuestItem::Useful(*bot, *item))
             return {Usage::Quest, Scope::QuestLog};
-        // Master synchronization, professions, tokens, bags, auction,
+        // Master synchronization, full profession catalogs, tokens, bags, auction,
         // disenchant and vendor branches are not ported; never invent None.
         return {};
     }

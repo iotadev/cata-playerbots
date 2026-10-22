@@ -6,6 +6,7 @@
 #include "Log.h"
 #include "World.h"
 #include "RandomPlayerbotFactory.h"
+#include "../Ai/Base/PlayerbotRecipeMaterials.h"
 
 void AddSC_playerbot_chat_commands();
 void UpdatePlayerbotAddonStrategyBatches(); // World-thread inbox/ACK pump; never reads engines.
@@ -23,9 +24,15 @@ public:
     }
     void OnStartup() override
     {
+        PlayerbotRecipeMaterials::Rebuild();
         TC_LOG_INFO("server.loading", "Optional mod-playerbots loaded; development admission %s",
             sWorld->getBoolConfig(CONFIG_PLAYERBOTS_DEV_ENABLED) ? "enabled" : "disabled");
     }
+    void OnConfigLoad(bool reload) override
+    {
+        if (reload) PlayerbotRecipeMaterials::Rebuild();
+    }
+    void OnShutdown() override { PlayerbotRecipeMaterials::Clear(); }
 };
 }
 

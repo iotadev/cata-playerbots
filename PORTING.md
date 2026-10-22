@@ -1,5 +1,796 @@
 # Port provenance and remaining work
 
+## Alpha milestone — 2026-10-21
+
+This source checkpoint combines donor-derived Rogue/Hunter foundations, native
+Hunter pet control, inventory retention and ordinary-bag upgrades, selected-NPC
+resupply, qualified junk sales and bounded class training. Features remain
+individually gated; native gameplay, inventory and database ownership are retained.
+The matching core README records the module revision to use.
+
+October 13 enabled Windows/Linux builds passed 476/476 tests each; the Windows
+all-modules-disabled boundary passed 20/20. Subsequent helper/documentation and
+include-only cleanup is qualified separately below. The expanded six-bot roster
+is saved, but its combined raid replay and Rogue/Hunter combat remain untested.
+Linux realm runtime, autonomous populations and full class/dungeon parity are
+not claimed by this milestone. Historical sections retain their own source scope.
+
+## Publication cleanup — 2026-10-21
+
+Applied the complete Creature include before PointMovementGenerator.h in the
+canonical PlayerbotPosition.cpp. This carries the already documented isolated
+Linux/no-PCH build correction into the source that will be published; it changes
+no gameplay. Prior Windows/Linux 476/476 remains dated build evidence, not a new
+post-cleanup compile result. Helper credential setup and documentation were also
+cleaned up in the core repository. Rogue/Hunter raid gameplay remains pending.
+No milestone commit, release pin update or push was made during cleanup.
+
+## Expanded roster replay tooling — 2026-10-14
+
+Added explicit `-ReuseExtraDps` to the local Windows copied-realm helper. It
+checks the private preparation receipt against exact offline native character/
+account/enrollment identities and saved level/spec, then starts the existing
+managed Rogue/Hunter sessions without provisioning, role grants or pet writes.
+Configuration uses the actual saved IDs and human account link; factory mutation
+stays disabled. All seven actors enter observer capture. Native completed-login
+receipts replace the remaining fixed preparation delay. Normal exit explicitly
+stops/saves both extras; existing failure cleanup shuts down the owned realm.
+The outdoor-only mode rejects dungeon/quest/provisioning/isolated gear-apply
+combinations and normalizes only wholly fixture-owned offline groups in the copy.
+
+Service-free mode guards, receipt validation and five/seven/disabled context
+roster checks passed. No server source changed in this batch; prior Windows/
+Linux 476/476 remains the compiled-source qualification. No services started,
+no new live gameplay, commit or push. Next step is one bundled outdoor raid
+using the stopped prepared seed, with a five-player subset retained for dungeons.
+
+## Native extra-DPS preparation — 2026-10-13
+
+Added explicit -PrepareExtraDps to the reused interactive mixed-party/module/
+role harness. It is a one-time headless mode against a fresh stopped copy:
+reject dedicated-name/account collisions, apply the optional ownership schema
+only to the copy, use native account creation/expansion commands, explicit
+enrollment and asynchronous native character provisioning. No character cloning,
+SQL identity adoption, forced online flags or direct inventory/pet writes.
+Production factory behavior and defaults are unchanged.
+
+Preparation waits for the managed lifecycle's online receipt, not just an
+online database bit or arbitrary delay, then requests the native six-role
+fixture. It requires PB-FIXTURE completion and saved native talent trees,
+stops/saves all six bots and shuts down the test-owned realm/database. Factory
+mutation is disabled again after creation; copied account links and combat
+gates remain available for the later replay. Service-free mode guards/parser
+checks passed. Server source/build remains Windows/Linux 476/476.
+
+Copied build/playerbot-smoke-20261013-164429 successfully prepared Testrogue
+(Combat, tree 181) and Testhunter (Marksmanship, tree 807), both level 20 with
+zero free talent points. Post-shutdown read-only inspection confirmed native
+weapon/chest persistence: Rogue main/offhand 4765 and chest 2300; Hunter
+mainhand 4765, bow 3039 and chest 2300. Existing starter items were preserved.
+Hunter has an active slot-0 native HUNTER_PET, entry 42710, level 20 and positive
+saved health. No separate pet generator was added. This establishes saved
+fixture prerequisites, not pet combat, spell effects, relogin or a raid clear.
+Private extra-dps-preparation.json records the created identities without
+credentials. All test-owned services are stopped; no commit or push.
+
+At this preparation snapshot, capture covered only the original five actors.
+The October 14 reuse-only helper above adds extra managed login and seven-actor
+capture. The human still converts the outdoor party to raid and invites both
+extras; live group/map/phase/arrival must be verified. A five-player subset
+remains the dungeon/quest path.
+
+## Expanded outdoor raid preparation — 2026-10-13 (local, uncommitted)
+
+The connected Hunter Windows full-script worldserver/tests-common build finished
+with 474/474, closing its pending Windows gap. Rogue/Hunter gameplay remains
+unobserved; build completion is not client proof.
+
+Disposable level-20 fixture preparation now accepts six explicit roles and up
+to six pending map-thread requests. Existing configured slot commands retain
+their original role mapping. Console-only managed fixture20 <GUID> <role> adds
+GUID-based preparation for online configured managed bots, with the same
+default-off Dev/Fixture20 gates, five-second request expiry and fresh native
+idle/alive/ungrouped/class/level/spec checks. Unknown roles fail rather than
+falling back to Warrior. Role names: protection, arms, frost, holy, rogue, hunter.
+
+Rogue prepares Combat, native sword/dual-wield abilities, baseline melee spells,
+two one-handed fixture weapons and leather. Hunter prepares Marksmanship,
+native sword/bow abilities, baseline ranged/pet spells, a bow and leather.
+Native talents/learn/equip/store/save helpers remain authoritative; existing
+gear is preserved and incomplete preparation is logged. Explicit fixture spell
+and item grants are controlled test data, not progression or production factory
+behavior. No pet creation, stable mutation, ammo or mana supply was added.
+
+Two pure tests cover exact role parsing and class/tab routing, including unknown
+role rejection. Windows/Linux full-script worldserver/tests-common passed
+476/476 each on the final source. Linux source/tests matched the working tree;
+evidence is preserved in ignored build/linux-raid-fixture-20261013-476/LastTest.log
+and build-both/Testing/Temporary/LastTest.log. Compilers and test-owned realms
+are stopped. No fixture command has been replayed
+yet; actual equip eligibility, pet availability and saved/relogin outcomes are
+unobserved. The expanded roster still needs native character preparation and
+an existing active Hunter pet. No realm was started, no commit or push.
+
+## Connected Hunter baseline — 2026-10-13 (local, uncommitted)
+
+Donor master rechecked at 79bd428115c8f33b74b13de23b133d49c3f75c60:
+src/Ai/Class/Hunter/HunterAiObjectContext.cpp, HunterActions.cpp/.h,
+Strategy/GenericHunterStrategy.cpp, GenericHunterNonCombatStrategy.cpp,
+MarksmanshipHunterStrategy.cpp, BeastMasteryHunterStrategy.cpp and
+SurvivalHunterStrategy.cpp. Reused the class registry/strategy structure and
+shared targeting, range, positioning, threat, recovery and corpse-loot readers.
+
+Cata adaptation adds native class admission and default-off
+Playerbots.Dev.EngineHunterCombat. Generic, Beast Mastery, Marksmanship and
+Survival routes schedule native Auto Shot, Serpent Sting, focus builders
+(learned Cobra/Steady Shot), Arcane Shot dumps and Kill Shot. Starter spec
+priorities select Kill Command, Chimera Shot or Explosive Shot respectively.
+This is not full rotations/spec parity. Native casts own learned abilities,
+focus generation/spending, weapon requirements, range, cooldowns and effects.
+Wrath ammo, mana, armor-penetration policy, removed abilities and direct pet
+happiness manipulation were not copied. Hunter item scoring remains Unknown.
+
+Auto Shot is a native autorepeat spell. Hunter movement/facing/target reassessment
+ignore that repeat alone when checking for another cast, while preserving real
+cast/channel locks. Cease interrupts Hunter autorepeat; no synthetic damage loop
+or repeated Auto Shot submission on an unchanged target was added.
+
+Pet support uses only the existing owned native HUNTER_PET on the same map,
+with CharmInfo and native PetAI; foreign/charmed/custom-AI pets are not controlled.
+Native active pet data selects the matching learned Call Pet slot (0..4), or
+Revive Pet for a dead active pet, while the bot/controller are idle. Mend Pet
+uses native casts and fresh health/aura facts. No pet generation, stable scanning,
+taming, replacement, direct health changes or pet database writes were added.
+
+Native CMSG_PET_ACTION is PROCESS_THREADUNSAFE. The map adapter therefore does
+not invoke its world-thread handler. It adapts its bounded command-flag setup
+and uses native PetAI::_AttackStart / FollowTarget on map-owned objects. Passive
+stance prevents independent aggro acquisition; attack requires the current
+authorized bot victim, fresh controller/map/leash/CC/pacify checks and native
+owner/pet attack eligibility. Stop/target loss/gate-off returns the pet to follow.
+Kill Command requires that the pet is already attacking the same current target.
+Native core ownership still handles save, transfer, death and unsummoning.
+
+Pure tests cover focus policy, execute threshold, active pet slot mapping, all
+128 attack-gate combinations, Mend Pet and native spec/target routing. Linux
+full-script worldserver/tests-common passed 474/474 on final reviewed source;
+the module source/tests snapshot matched the working tree. Evidence is preserved
+in ignored build/linux-hunter-baseline-20261013-474/LastTest.log. An initial
+compile found a missing CharmInfo.h include; it was corrected and rebuilt.
+Windows subsequently completed the full build and passed 474/474 as well.
+These are Hunter source/build results, not live outcomes. Pet creation,
+advanced traps/kiting, pet spell/talent optimization and full spec coverage are
+deferred. No new realm, commit or push; the expanded roster is not yet provisioned.
+
+## Connected Rogue baseline — 2026-10-13 (local, uncommitted)
+
+Donor master was rechecked at 79bd428115c8f33b74b13de23b133d49c3f75c60.
+References: src/Ai/Class/Rogue/RogueAiObjectContext.cpp,
+Strategy/CombatRogueStrategy.cpp, Strategy/AssassinationRogueStrategy.cpp,
+Action/RogueComboActions.cpp and Action/RogueFinishingActions.h, together with
+src/Ai/Base/Trigger/GenericTriggers.cpp/.h and TriggerContext.h.
+The latter binds the near-death combo trigger to three points / three seconds;
+its generic constructor defaults are not the active donor configuration.
+
+Added a Rogue context and native class admission as one connected slice. Combat
+and generic routes use Sinister Strike; Assassination prefers learned Mutilate,
+then behind-qualified Backstab, with Sinister Strike as fallback. All routes
+maintain missing Slice and Dice, spend five current-target points on Rupture or
+Eviscerate, and prefer immediate Eviscerate over a fresh bleed near target death.
+Kick uses the shared native interrupt executor. Shared melee facing/reach/behind,
+party DPS reassessment, threat, potions, food and corpse loot are registered.
+Default-off Playerbots.Dev.EngineRogueCombat gates attack admission and actions;
+disabling it during a fight ceases the Rogue path, with no Warrior fallback.
+
+Cata Unit::GetComboPoints/GetComboTarget and POWER_ENERGY are read on the map
+thread, then rechecked when the queued action executes. Native TryCast owns
+learned-spell, weapon, cost, cooldown, cast admission and submission checks.
+No energy/combo mutation, direct damage or fabricated learned spells were added.
+Pure policy tests cover ownership, energy/cap boundaries, finite lifetime,
+existing auras and bleed-vs-immediate-damage choices; spec/target routing tests
+cover native Cata talent-tree selectors and the independent gate.
+
+This is a baseline, not full Rogue/spec parity. Subtlety selects the generic
+route, not a falsely labeled complete rotation. Poison provisioning/Envenom,
+stealth/openers, cooldowns, broader Cata spec abilities and Rogue gear scoring
+remain deferred. Unknown Rogue equipment facts stay Unknown. The previous
+Warrior/Mage/Priest live replay does not validate Rogue behavior.
+
+Final-source Windows and Linux full-script worldserver/tests-common builds
+passed 469/469 each with all three modules enabled. Linux source/tests matched
+the working tree; reviewed files were forcibly recompiled to avoid copied-file
+timestamp ambiguity. Evidence: build-both/Testing/Temporary/LastTest.log and
+ignored build/linux-rogue-baseline-20261013-469/LastTest.log. The compiler
+container is stopped; no new live realm or client check was started. The prior
+Windows modules-disabled worldserver/tests-common 20/20 remains the unchanged
+core-boundary evidence, not a Rogue runtime test. No commit or push.
+
+## Bundled party replay and modules-disabled closure — 2026-10-13
+
+Copied realm build/playerbot-smoke-20261013-120608 used the all-modules-enabled
+464-test source with level-20 Protection/Arms/Frost/Holy provisioning. Live
+preflight found five online, alive, mutually visible phase peers in one group,
+map 530 / instance 0, with fresh samples and no Stay holds.
+The human reported a manual populated-bag swap working; this does not prove a
+bot-initiated swap, exact contents or saved/relogin persistence.
+
+Normal Luzran/add pulls recorded tank/Arms/Frost routing, accepted Taunt/
+Shield Slam/Mortal Strike/Rend/Heroic Strike and Mage spell starts, Priest
+Renew/Heal starts, then native corpse opening. Fresh post-pull state showed
+everyone alive/full health, all bots noncombat and no queued actions. Accepted
+casts/action returns are not landed-effect proof or quantitative threat/healing.
+This is useful party operation, not a full clear or broad class parity.
+
+After human logout, the harness stopped/saved all four bots, captured saved
+inventory, shut down world/auth and cleanly stopped the copied MySQL instance.
+Before/after bot captures contain identical 58 item rows and mappings; they
+exclude the human bag test and are not causal equip/loot/resupply assertions.
+The baseline precedes native role provisioning. Native maintenance/training/
+bot bag migration, recovery pressure and new resurrection remain unobserved.
+
+Added guarded -MaintenanceEquip to the reused interactive maintenance recipe,
+separate from old waist-only -GearApply assumptions. It enables qualified
+score/equip gates without provisioning/granting items; ordinary fixtures reset
+inherited duplicates. Captures before provisioning/session and after normal
+logout are ignored private evidence. Service-free guard/config tests passed.
+
+Fresh Windows all-three-modules-disabled worldserver/tests-common completed
+20/20, including the swap predicate. This closes the full disabled-server build
+gap; it is not a modules-disabled runtime check. Full enabled Windows/Linux
+remain 464/464. All test-owned services and compilers are stopped; unrelated
+services were preserved. No commit or publication was performed for this replay.
+
+## Swap-scoped native populated-bag admission — 2026-10-13
+
+Compared current AzerothCore master
+`f5f668e29a7548a566eff4a69cb7a30d216dc7a0` (PlayerStorage.cpp) with Cata.
+Its specific-slot storage path lacks Cata's blanket nonempty-bag rejection;
+both cores have a native SwapItem content-transfer branch. Rather than removing
+Cata's generic rejection, the port adds a private CanStoreItemInternal context:
+public CanStoreItem always passes false, while only SwapItem's displaced-item
+storage check requests the bag-exchange exception.
+
+The exception requires native swap context, swapping mode, an owned source in
+a carried bag slot, an owned empty receiving bag at a top-level backpack
+position, and both matching ownership facts. Bank/nested/general store calls
+cannot obtain it. The entire existing storage path still validates metadata,
+binding/loot state, counts and positions; native SwapItem still checks both
+directions, equip/unequip admission, item-to-bag compatibility and capacity before
+moving anything. No scratch player flag, global mode, direct content edit or
+Playerbots-only bypass is introduced. This native correction also exists without
+the optional modules. Fresh disabled-server qualification is recorded above.
+
+The ordinary-bag adapter removes its temporary empty-destination restriction
+and uses the already-built copied GUID/count/affix postcondition checks.
+Candidates must still be empty ordinary owned backpack bags, with one-change
+bounds and existing command/state gates. Specialized, bank/nested, affixed or
+busy layouts remain excluded. Native populated migration and saved/relogin state
+remain unobserved and require the bundled fixture before claiming runtime success.
+
+Added a core test enumerating all 128 combinations of seven exception facts;
+only the complete case admits storage. This proves the predicate, not native
+container migration. Windows/Linux full-script worldserver/tests-common builds
+passed 464/464 each with all three modules enabled. Linux core/module source and
+tests matched the current snapshot. Evidence: build-both/Testing/Temporary/LastTest.log
+and ignored build/linux-native-bag-swap-20261013-464/LastTest.log.
+Builds, compiler container and realms are stopped. The preceding 463/463 pair
+does not qualify this core change; native migration/persistence still needs
+the bundled client fixture.
+
+Fresh Windows tests-common with Playerbots/AHBot/context modules all disabled
+passed 20/20, including the core swap predicate. Evidence:
+build-core-only/Testing/Temporary/LastTest.log. The modules-off worldserver was
+not rebuilt in that first check; the subsequent full disabled worldserver/
+tests-common run also passed 20/20. No module dependency is used by the core
+predicate test.
+
+## Native empty ordinary-bag replacement and populated-bag blocker — 2026-10-13
+
+Ported the empty ordinary carried-bag replacement branch of donor EquipAction
+at remote-checked master `79bd428115c8f33b74b13de23b133d49c3f75c60`.
+The existing explicit `gear apply` fallback now prefers an empty slot, otherwise
+the smallest proven empty ordinary bag strictly smaller than the selected empty
+backpack candidate. Candidate ranking remains largest capacity, stable source
+slot ties. At most one change under the existing control/state/equip gates.
+
+Cata Player::SwapItem contains a content-transfer branch, but its earlier
+CanStoreItem_InSpecificSlot check rejects nonempty bags stored in backpack
+positions (EQUIP_ERR_DESTROY_NONEMPTY_BAG). Thus the native branch alone does not
+establish populated replacement. The adapter excludes populated destinations
+and does not relax the generic storage predicate or edit contents itself.
+It preserves the displaced empty bag at the candidate's source. The adapter
+calls the native auto-equip handler, not custom RemoveItem/StoreItem logic.
+It copies up to 36 content facts per bag: GUID, entry, count, random property and
+suffix factor. Ownership/layout/template validity, duplicate identities and
+trade/loot/wrapped/refundable state are checked before using a destination.
+Specialized, bank/nested, affixed bag instances and nonempty candidates remain
+excluded. The new policy examines at most four carried destinations.
+
+Confirmation requires the selected GUID at the destination, the displaced GUID
+empty at the original backpack position (or that position empty for a fill),
+and exact copied contents (empty in this enabled scope). The content matcher
+is unit-tested with nonempty copied examples, not live migration proof.
+An unconfirmed outcome is not rollback
+or proof that nothing moved; ordinary chat now requests inspection before retry.
+No new core seam/config, auto equip loop, sales scope or loot vote category.
+Unit tests cover destination precedence and content mismatch detection.
+Linux final-scope worldserver/tests-common passed 463/463. Windows full build
+also passed 463/463; its final-source incremental check for the completed
+confirmation/empty-destination restrictions subsequently passed 463/463.
+Linux source/test snapshot matched current
+source; ignored evidence is build/linux-bag-replacement-20261013-463/LastTest.log.
+Linux compiler and realms are stopped.
+Native replacement/persistence is unobserved. Before enabling populated bags,
+compare the donor core's swap/storage contract and adapt Cata's swap-specific
+admission without weakening unrelated generic storage callers.
+
+## Explicit native empty-bag-slot fill — 2026-10-13
+
+Connected the donor EquipAction bag branch at remote-checked master
+`79bd428115c8f33b74b13de23b133d49c3f75c60` to the existing explicit
+`gear apply` request. It is a fallback after qualified gear changes, still
+at most one native slot change under existing control, expiry, idle/party-combat,
+transfer, rest, loot and StarterEquip/StarterGearScore gates.
+
+Scope is one empty carried bag slot, never replacement. Scan is limited to
+backpack inventory (16 native positions); choose the largest usable ordinary
+empty bag, with stable source-slot ties. Specialized/affixed, wrapped/refundable,
+trade/loot-busy, foreign, non-unit-count, bank/nested and malformed bags are
+excluded. Native CanEquipItem checks exact destination, then native
+HandleAutoEquipItemSlotOpcode/SwapItem performs the move. Cata IsEquipmentPos
+includes carried bag slots. The observed destination GUID and emptied source
+must agree before reporting Confirmed. No direct storage/container-content edit.
+
+The donor directly swaps its selected smallest bag slot, including replacement.
+That populated-bag migration is deliberately not copied here. Future replacement
+needs its own native contents/storage qualification. A successful fill invalidates
+the existing gear snapshots and follows the existing pending-action reset;
+native persistence/relogin remain unobserved. No new core hook or config gate.
+Tests cover the pure owned/backpack/ordinary/empty/count/busy/affix admission
+predicate. Linux full-script worldserver/tests-common passed 461/461 with all
+three modules enabled; current core/module source and tests matched the build
+snapshot. Ignored evidence: build/linux-empty-bag-fill-20261013-461/LastTest.log.
+Linux compiler and realms are stopped. Windows likewise completed 461/461, collected October 13
+from the full test log and matching fresh binary, with no active compiler.
+This pair describes empty-slot fill, not the replacement extension above.
+
+## Ordinary bag-capacity retention — 2026-10-12
+
+Ported the ordinary-container branch of ItemUsageValue::Calculate and its
+GetSmallestBagSize dependency at remote-checked donor master
+`79bd428115c8f33b74b13de23b133d49c3f75c60`. Native Cata container slots, bag
+family, inventory type and CanUseItem qualify the candidate. The map-owned
+reader inspects all four carried bag slots; empty slots count as zero capacity.
+It does not copy the donor START+1 loop, which skips the first carried slot.
+Specialized bags, malformed layouts, mismatched live/template sizes and bank
+slots never provide replacement evidence. Native MAX_BAG_SIZE (36) is enforced.
+
+A proven ordinary-bag capacity improvement yields Equip/BagCapacity in the
+shared item-usage value. Non-upgrades and unsupported bags remain Unknown
+(or a separately proven quest fact), not donor None or permission to sell.
+The existing quest-reward survey consumes this positive fact; tied equip
+categories without comparable scores stay unresolved rather than mixing bag
+slot counts with gear stat weights.
+
+This is read-only retention/reward inspection, not a bag-equip action. No
+SwapItem, populated-bag migration, inventory move, bank/loot vote widening or
+vendor purchase/sale scope is added. Future native equip must independently
+recheck exact owned identity, destination and displaced contents. No new config,
+core seam or native/database mutation. Tests cover first/empty slots, supported
+capacity bounds, specialized/unknown slots and conservative reward ranking.
+Linux full-script worldserver/tests-common passed 460/460 with all three modules
+enabled. Core/module source and tests matched the build snapshot. Evidence:
+ignored build/linux-bag-capacity-20261012-460/LastTest.log. Linux compiler and
+realms are stopped. The Windows run completed on October 12; its full 460-test
+log and freshly linked worldserver were inspected October 13, with no compiler
+still active. Earlier 457/457
+below is predecessor evidence. Native inventory/reward behavior and Linux realm
+runtime remain unobserved.
+
+## Recovery-supply vendor resupply — 2026-10-11
+
+Extended donor BuyAction/consumable item-usage routing at remote-checked master
+`79bd428115c8f33b74b13de23b133d49c3f75c60`. The selected-vendor native purchase
+adapter now handles food, drink, healing potions, mana potions and bandages as
+five independent stock categories. Numeric buying remains one bundle; vendor
+mode retains the 128-row scan, best usable native item-level candidate per type,
+ten bundles per type, two-stack requested-ID cap and fresh current/better-stock
+need checks. Up to five categories may buy, so the total cap is now 50 bundles.
+
+Added a template overload of the existing combat RecoverySpell classifier,
+with the carried-item overload delegating unchanged. Purchase qualification
+therefore uses the same first valid on-use, positive, combat-usable, instant,
+non-channeled native potion spell checks. Flasks, Healthstone vendor purchasing
+and unsupported restoration effects are excluded. Native CanUseItem still
+owns level/class/profession prerequisites, including bandages. Bandage stocking
+does not introduce automatic bandage use; potion use retains its separate gate.
+
+No core seam or database/config default changes. Buy remains independently
+default-off and human-requested, with bot funds, native gold-only vendor rows,
+conditions, inventory storage and partial outcomes. Unsupported scopes,
+currency/token rows and automatic shopping remain excluded. Replies now report
+observed quantities separately for all five categories.
+
+Windows/Linux worldserver/tests-common passed 457/457 each with all three modules
+enabled. Existing selection tests now use typed categories; new tests cover
+independent healing/mana/bandage choices and reject invalid category indexes.
+Current ignored evidence: build-both/Testing/Temporary/LastTest.log and
+build/linux-recovery-stock-20261011-457/LastTest.log. Native purchase/persistence,
+automatic bandage use and Linux realm runtime are not claimed. The bundled
+maintenance checklist carries the new observations, not an isolated forced test.
+
+## Native class-trainer catalogue and bounded batch — 2026-10-11
+
+Extends the explicit-purchase adapter below at donor TrainerAction master
+`79bd428115c8f33b74b13de23b133d49c3f75c60`, rechecked against the remote.
+Added native read-only GetSpells/CanTeachSpell/GetSpellState access, matching
+donor policy access without duplicating eligibility. Native TeachSpell remains
+the mutation authority behind the list/buy session handlers.
+
+`trainer` / `train ?` lists up to 12 learnable offers from the first 128 native
+rows, with purchase IDs, discounted copper prices and current affordability.
+`trainer learn` / `train all` attempts at most 16 initially available copied
+IDs, cheapest first with spell-ID ties. Duplicate IDs preserve the native first
+row. Every purchase re-resolves trainer/control/map/state/expiry and native
+teachability/funds. Primary-profession initialization and unresolved learned
+spell metadata are excluded even if offered by a class-trainer row.
+
+No native pointers cross queued intent; the initial candidates copy IDs/costs.
+Newly unlocked prerequisite offers wait for a later command. Funds/state/caps or
+zero newly observed learned IDs stop the batch without retry or rollback.
+Summaries distinguish attempts, observed learning and actual copper spent from
+completion/persistence. Both inspection and purchases use the existing Train
+gate. No addon UI claim, trainer travel, profession automation or autonomous
+budget reserves. Numeric requests now require a teachable offer in the bounded scan.
+
+The mailbox reserves zero for inspection and UINT32_MAX for the named batch.
+Strict optional parsing keeps malformed numeric operands distinct from those
+operations; selectors never become native spell IDs. Donor `trainer` and
+`trainer learn` are supported in this restricted class scope only. Spell links/
+names and full donor maintenance/factory remain unported.
+Windows/Linux full-script worldserver/tests-common passed 456/456 each with all
+three modules enabled. Windows final-source incremental validation also passed;
+Linux source/test snapshots matched the checkout and a final incremental build
+completed. Evidence is in build-both/Testing/Temporary/LastTest.log and ignored
+build/linux-trainer-catalog-20261011-456/LastTest.log. Compiler and realms stopped.
+No client learning/persistence or Linux realm runtime is claimed. The older
+455/455 below describes the single-spell predecessor; module-disabled validation
+remains October 9 evidence, not a fresh run with these hooks.
+
+## Explicit native class training — 2026-10-11
+
+Donor TrainerAction at master `79bd428115c8f33b74b13de23b133d49c3f75c60`
+provides the selected-human-target workflow. Its spell enumeration and direct
+payment/CastSpell/learnSpell path are not copied: Cata trainer helpers are private
+and native interaction state must be established. Ordinary whisper/party/raid
+`train <numeric trainer spell ID>` instead queues one copied intent for world
+execution behind independent default-off Playerbots.Maintenance.Train.Enabled.
+The native Hello/list handler establishes SourceGuid/TrainerId, then the native
+buy handler owns prerequisites, funds, reputation cost and learning.
+Donor chat registers `trainer` (inspection/learn parameters); this bounded
+`train <ID>` adapter does not claim that parser or addon protocol parity.
+
+Scope is a nearby default class trainer eligible for the bot; both human and bot
+must pass native NPC interaction. Control, map/instance, five-second expiry and
+idle/alive/session state are rechecked. Malformed/zero/overflow operands are
+rejected, with signed packet bounds preserved. No train-all, gossip-only trainer
+selection, profession initialization, trainer travel, gold cheat or SQL mutation.
+Copied mailbox Item stores the numeric spell operand for this distinct queue.
+Reports count newly observed direct/learn-effect spell IDs and copper spent;
+zero observation or purchase submission is not proof of later spell learning.
+Native refusal detail is not yet forwarded to ordinary chat. Persistence and
+client training remain unobserved. Windows and Linux full-script
+worldserver/tests-common builds passed 455/455 each with all three installed
+modules enabled. Linux core/module source and test snapshots matched the current
+checkout. Evidence: build-both/Testing/Temporary/LastTest.log and
+build/linux-training-20261011-455/LastTest.log (ignored local artifacts).
+The compiler container and test realms are stopped. This is not Linux realm
+runtime or native training/persistence proof; module-disabled qualification
+remains the older October 9 result, not a fresh run of these new hooks.
+Ordinary copied fixtures explicitly reset training off. The separate guarded
+`-MaintenanceTrain` opt-in requires `-Maintenance` and enables it only in the
+disposable copy; service-free guard/reset/duplicate-setting tests passed.
+
+## Copied recipe-material catalog — 2026-10-11
+
+Donor master remains `79bd428115c8f33b74b13de23b133d49c3f75c60`.
+Ported the recipe-template fallback of RandomItemMgr::IsCraftedBySkill into a
+world-lifecycle-built positive index. Native recipe subclass/required-skill
+metadata fixes the queried profession; existing spell skill associations must
+match or be absent for recipe-only spells. Reagents and direct create-item
+outputs, including one trigger level, produce copied (skill,item) pairs.
+The donor fallback's missing skill comparison and item-only cache are not copied.
+
+PlayerbotsModuleWorldScript builds the snapshot on OnStartup, after core item/
+spell loading and before WorldUpdateLoop. OnConfigLoad(reload=true) rebuilds it;
+OnShutdown clears it. Atomic shared_ptr publication exposes immutable copied
+IDs only, no retained ItemTemplate/SpellInfo/Player pointers. Map readers use
+held/gathering-associated skills to query it before the native skill-line scan.
+There is no new per-tick catalog scan, autonomous worker, SQL or inventory edit.
+
+The build examines at most 250000 templates and keeps at most 100000 distinct
+positive facts. Missing metadata, cap exhaustion and misses remain unresolved;
+partial snapshots retain established positives and never authorize a sale.
+Native item/spell metadata is startup data; external metadata mutation requires
+a coordinated rebuild. Deeper trigger/loot-table recursion and autonomous
+skill-up/reagent usefulness remain separate. No crafting/training action is added.
+
+Tests cover skill/item key separation, duplicate facts and positive-only cap
+behavior. Windows/Linux full-script worldserver/tests-common passed 454/454 each.
+Linux module/test source comparison passed; its compiler was stopped after
+archiving build/linux-recipes-20261011-454/LastTest.log. Native startup/reload
+publication, client material behavior and Linux realm runtime remain
+unobserved; previous source counts below describe their earlier snapshots.
+
+## Qualified plain-junk native sales — 2026-10-11
+
+Donor master remains `79bd428115c8f33b74b13de23b133d49c3f75c60`.
+Adapted SellAction's native vendor/item GUID/count submission and complete-stack
+scope. Its full Vendor/Auction visitor and quality sweeps are not copied over
+unresolved retention facts. The new exact ordinary command `sell vendor` accepts
+only a qualified plain gray misc/junk subset, under independent default-off
+Playerbots.Maintenance.Sell.Enabled. This is not the full donor command scope.
+
+The world-owner classifier requires owned carried inventory, poor misc/junk,
+no binding/soulbinding, effects, affixes, start quest, required skill, totem,
+special flags, duration, holiday or script. Both bot and human must have no
+relevant professions and no guild, making missing skill/guild catalogs irrelevant
+for this subset. Otherwise it remains unresolved/protected. All active quest
+metadata must exist; direct objective/source references are protected even when
+the quest is complete and carried counts are sufficient. Native HasQuestForItem
+adds source/state coverage. Trade, loot and refundable/wrapped state also block.
+
+Capture at most eight eligible GUID/entry/count identities from backpack/bags;
+never equipped/bank targets. Before each native CMSG_SELL_ITEM, re-resolve gate,
+five-second expiry, controller/authority, captured map/instance/vendor, identity,
+count and all retention facts. No cached map usage is sale authority. Native
+HandleSellItemOpcode owns merchant/ownership/stack checks, inventory removal,
+quest counters, money and finite buyback. World::UpdateSessions precedes the
+joined map-update phase; no map engine or off-thread worker performs the mutation.
+Partial results remain; no retry/rollback or buyback guarantee. Replies report
+observed carried-count decreases and copper gains, with skipped/unconfirmed counts.
+
+The copied helper's new -MaintenanceSell switch requires -Maintenance and its
+reused interactive full-party module guard. Ordinary maintenance resets inherited
+Sell gates off; the separate opt-in enables them only in the copy. Service-free
+actual guard/reset tests passed without a realm. C++ tests cover complete facts,
+the narrow template shape, exact command and active quest references. Current
+Windows worldserver/tests-common passed 452/452 after the final quest guard.
+Linux full-script worldserver/tests-common also passed 452/452 after the final
+quest guard refresh and compiled core/module/test source comparison. Evidence:
+build/linux-vendor-20261011-452/LastTest.log. The compiler was stopped after
+archival. Client sale/persistence and Linux realm runtime remain untested.
+
+## Owned disenchant-retention facts — 2026-10-11
+
+Donor master remains `79bd428115c8f33b74b13de23b133d49c3f75c60`; its disenchant
+branch in ItemUsageValue::Calculate was checked against fetched master. Preserve
+enchanting skill/rank, uncommon-or-better equipment and BOP or soulbound-BOE policy.
+Cata Spell::CheckCast additionally rejects qualities above epic, missing
+DisenchantID and the unsigned -1 required-skill sentinel; these limits are included.
+
+The shared carried item-usage path can now return Disenchant/OwnedDisenchant only
+after a Keep comparison that is a qualified non-upgrade for the exact owned item
+GUID/property/suffix factor. All matching destination rows need known layout,
+finite candidate/existing scores, another occupied item and Keep decisions.
+Upgrade, fill, repair, missing/unknown rows and self-equipped comparisons cannot
+be demoted. The owner's backpack/bags must contain exactly one matching variant;
+bank/equipped items are excluded, and another copy's soulbinding is not borrowed.
+Known profession-use facts still take precedence.
+
+This is read-only retention, not native cast/sale authority. The comparison can
+be a recent cached map observation; any future consuming action must revalidate
+current role, ownership, quest/profession need, cast admission and loot results.
+No disenchant spell, roll-category expansion, material grant or selling command
+is added. A nonzero DisenchantID is not proof of populated loot or produced items.
+False eligibility preserves the existing Keep/Unknown/equipment result.
+
+Tests cover native/donor binding and rank, rarity/table/sentinel limits, exact
+instance/affix qualification and priority/unknown/score guards. The tests use
+lightweight native GUID construction to keep tests-common independent of the
+full game GUID factory. Windows worldserver/tests-common passed 448/448 after
+the test-linkage repair. Linux full-script worldserver/tests-common also passed
+448/448 after module refresh, configuration and source/test comparison. Evidence:
+build/linux-disenchant-20261011-448/LastTest.log; compiler stopped after archival.
+Client retention behavior and Linux realm runtime remain untested. Earlier
+446-test results below describe the preceding material-reader source.
+
+## Skill-line material retention — 2026-10-11
+
+Donor master remains `79bd428115c8f33b74b13de23b133d49c3f75c60`.
+Adapted RandomItemMgr::IsCraftedBySpellInfo/IsCraftedBySpell, the skill-line part
+of IsCraftedBySkill, and ItemUsageValue::IsItemUsefulForSkill gathering aliases.
+For human-controlled bot item usage, native trade goods/misc/reagent/gem items
+can now yield positive Skill/ProfessionRetention facts from the owner's relevant
+skill catalog. Mining also considers Blacksmithing/Jewelcrafting/Engineering;
+Skinning considers Leatherworking; Herbalism considers Alchemy, as upstream.
+Native Inscription/Archaeology skill-line metadata extends the positive Cata scope.
+
+Use Cata DBCManager::GetSkillLineAbilitiesBySkill, checking each row's actual skill
+identity and fresh SpellInfo. Match positive reagent IDs or direct CREATE_ITEM
+outputs; inspect one trigger level as upstream. No SQL, live-player cache or
+cross-skill item-only cache is introduced. Deduplicate queried skills and inspect
+at most 4096 ability rows per query. Exhaustion, absent metadata or a miss is
+unresolved, not a negative classification or permission to sell. Native Cata
+ITEM_CLASS_MISCELLANEOUS replaces the donor ITEM_CLASS_MISC enum name.
+
+The donor's recipe-template fallback is not copied: it needs a bounded Cata
+catalog tied to the queried profession, rather than scanning every recipe and
+treating another profession's relationship as proof. Deeper triggers, create-item
+loot tables, autonomous useful-spell/reagent recursion and skill-up policy remain
+outside this reader. Existing tool/recipe retention and native mutation gates
+are unchanged. No selling, crafting or training command is enabled.
+
+Tests cover class scope, gathering associations, Cata skill additions and positive
+reagent/create-item matching including signed sentinels. Full-script worldserver
+and tests-common built on Windows/Linux, passing 446/446 on both after the enum
+adaptation. Linux source/test comparison passed and its compiler was stopped.
+Evidence: build-both/Testing/Temporary/LastTest.log and
+build/linux-material-20261011-446/LastTest.log. Client material behavior and Linux
+realm runtime remain untested; previous 443-test qualification below
+applies to the earlier tool/recipe source snapshot.
+
+## Profession retention reader — 2026-10-11
+
+Rechecked donor master `79bd428115c8f33b74b13de23b133d49c3f75c60`.
+Compared the cached reference against that fetched revision: the tool, recipe
+and crafting-cache functions are unchanged; unrelated config/ammo changes are
+outside this port. The recorded donor pin applies to the verified functions.
+Ported ItemUsageValue::IsItemNeededForSkill tool IDs and the recipe portion of
+IsItemUsefulForSkill into a positive-only PlayerbotProfessionItem reader. The
+shared item-usage value returns Skill/ProfessionRetention before stock/equipment
+for a current human-controlled bot, preserving the donor human-master precedence.
+Tool associations use native HasSkill and retain donor multi-skill mappings.
+Legacy tool IDs are retained conservatively; this is not proof of current Cata
+crafting requirements or an optimal tool upgrade policy.
+
+Cata recipes use ItemTemplate::Effects instead of donor Spells[2].SpellId.
+Native Player::CastItemUseSpell and Spell::EffectLearnSpell special-case wrappers
+483/55884: first item effect identifies the wrapper, second supplies its target
+through base points. The reader validates wrapper/target catalog entries before
+using native HasSpell. Other direct learn-ID and on-use learn-effect targets are
+read without casting or learning. Missing metadata is unresolved. Already-known
+recipes do not become Vendor/None merely because this positive branch ends.
+Added native Jewelcrafting/Inscription subclass mappings to the donor recipe
+switch; generic books remain unsupported. Skill rank/usability is not proof that
+the recipe can be learned now; this slice protects future-use items too.
+
+Trade goods/reagent skill catalogs, guild tasks, disenchant and general vendor
+fallback remain unported. RandomItemMgr::IsUsedBySkill depends on its crafting
+catalog and caches by item ID alone; a future port must preserve skill-qualified
+facts rather than reuse that cache as proof for another profession. No selling,
+automatic crafting/training or native roll-class expansion is added. Existing
+roll adapters retain their supported native scopes; this is metadata retention,
+not an actual item-instance grant/equip/sell authority.
+
+Tests cover tool associations, recipe subclasses, unknown/known recipe inputs
+and native generic-wrapper target selection. Windows full-script worldserver
+built and tests-common passed 443/443 after the test-warning cleanup. Linux
+full-script worldserver/tests-common also passed 443/443 after module refresh,
+explicit CMake configuration and compiled-source comparison. Evidence:
+build/linux-profession-20261011-443/LastTest.log; compiler stopped after archival.
+Client profession behavior and Linux realm runtime remain untested. Previous 439-test
+maintenance qualification below applies to its earlier source snapshot.
+
+## Combined maintenance source qualification — 2026-10-11
+
+Current repair, numeric purchase and selected-vendor restock source built full
+static-script worldserver/tests-common on Windows and Linux, passing 439/439
+tests on each. Linux used Ubuntu 22.04/GCC 11.4 Release with normal PCH and all
+three installed modules enabled. Refreshed core, CMake, Playerbots, AHBot and the
+canonical optional observer sources, explicitly configured test discovery, and
+verified core/module C++ and tests match the current working source. The isolated
+compiler used four CPUs/8 GiB and was stopped after archival.
+
+Evidence: build-both/Testing/Temporary/LastTest.log and
+build/linux-maintenance-20261011-439/LastTest.log. Copied-fixture maintenance
+guard/reset checks also passed without services. Client repair/resupply and Linux
+realm runtime remain untested. Earlier pending-build notes below describe their
+intermediate steps, not the current source qualification. No selling mutation,
+autonomous shopping or full dungeon clear is claimed.
+
+## Maintenance fixture and selling dependency review — 2026-10-11
+
+The existing Windows-client copied-realm helper now accepts `-Maintenance` only
+with the reused interactive full mixed-party module fixture. Its config writer
+removes inherited Repair/Buy gates, then writes one explicit setting for each;
+ordinary fixtures disable them. Service-free tests exercised the actual AST
+guard/reset statements, rejecting missing prerequisites and checking duplicate/
+indented seed gates and unrelated-setting preservation. No realm was started.
+
+Donor master remains `79bd428115c8f33b74b13de23b133d49c3f75c60`.
+SellAction.cpp has two different routes: explicit quality/item visitors, and
+`sell vendor` using ItemUsageValue Vendor/Auction results. The quality visitor
+excludes profession tools (misc/fishing weapons or TotemCategory), but is not a
+complete profession/quest retention policy. ItemUsageValue::Calculate evaluates
+skill needs, usable stock, guild tasks, equipment, disenchant, quests and ammo
+before reaching its sell-price fallback. Sell price alone cannot establish safe
+vendor usage in this port; unresolved earlier branches remain Unknown.
+
+Cata HandleSellItemOpcode uses native vendor/item GUID/count, then checks owner,
+nonempty bags, active loot, refundable state and sell price. It moves the item
+to buyback and changes money/quest counts. These native checks do not replace
+bot retention policy; buyback is finite, not a rollback guarantee.
+Next selling work should port donor retention facts and inspect actual carried
+identities before enabling bounded native sales. Keep equipped/bank items,
+profession tools, quest/use/keep facts and unknown classifications protected.
+No sell command, quality sweep or vendor-price fallback is enabled by this batch.
+
+## Selected-vendor food/drink restock — 2026-10-11
+
+Rechecked remote master at `79bd428115c8f33b74b13de23b133d49c3f75c60`.
+Audited BuyAction::Execute, BudgetValues::FreeMoneyForValue and the existing
+ItemUsageValue consumable policy. FreeMoneyForValue returns current money when
+the master is a real player; repair/training/travel/guild reserve calculations
+apply to autonomous bots. This human-led slice preserves that distinction and
+does not add unused autonomous-budget estimates.
+
+`buy vendor` requests bounded food/drink restock at the human's selected nearby
+vendor, under the existing Buy gate and whisper/party/raid authorization. Item
+zero in the purchase mailbox represents this exact named operation; malformed
+numeric input never becomes a vendor batch. The repair queue remains separate.
+Snapshot at most 128 native vendor rows and copy one best item/slot per type.
+Use native item level as the donor's score-zero fallback, with stable item/slot
+ties, and require fresh donor StockUsage == Use. Unknown/nonfood/extended-cost/
+unusable rows are excluded. Numeric buying retains its one-bundle override.
+
+The existing consumable counter is factored into StockUsageFor so both map-owned
+values and the world-owned buyer use the same native carried-only facts and
+current/better-stack rules; no cached map value is used as mutation authority.
+Re-resolve control, gate, expiry, map, NPC, row identity and need before every
+bundle. Up to ten purchases per type preserves the donor consumable loop cap;
+fresh need and the two-stack requested-ID cap can stop earlier. Only copied
+offers survive native calls. No NPC discovery, autonomous scheduling or rollback.
+
+Selected-vendor mode chooses one candidate per type rather than all donor item
+categories. If native funds/conditions/stock/storage block it, that type stops;
+there is no fallback to another rank. Summary replies report observed food/drink
+quantity increases and spending, not persisted items or a fully stocked claim.
+Tests cover exact named command, independent type ranking and snapshot limits;
+existing stock/mailbox/purchase tests remain applicable. Current Windows build
+qualification passed: full-script worldserver/tests-common built and 439/439
+tests passed, including the three new vendor-mode tests. Evidence:
+build-both/Testing/Temporary/LastTest.log. Linux and client restock coverage remain pending.
+
+## Explicit food/drink purchase — 2026-10-11
+
+Rechecked remote donor master `79bd428115c8f33b74b13de23b133d49c3f75c60`.
+Source basis: `src/Ai/Base/Actions/BuyAction.cpp` (explicit item purchase and
+native carried-count confirmation), `src/Ai/Base/Value/BudgetValues.cpp`
+(repair/training/gear/consumable budget dependencies), and the existing ported
+ItemUsageValue consumable classifier. This slice ports explicit human selection,
+not automatic `buy vendor`, item scoring or free-money budgeting.
+
+Command: ordinary whisper or party/raid `buy <numeric item ID>`, using the human's
+selected nearby vendor. Default-off `Playerbots.Maintenance.Buy.Enabled` is
+independent of repair. Both human and bot must pass native interaction checks.
+Copied intent captures vendor/item/map/instance/requester with five-second expiry,
+in-flight exclusion and fresh attachment/control/idle-state checks on the world
+owner. Repair and purchase share the mailbox implementation, with separate queues
+and native adapters; no live game pointers cross it.
+
+Only usable, classified food/drink rows of native item type with ExtendedCost zero
+are eligible. One bundle is ItemTemplate::GetBuyCount individual items: native
+Cata BuyItemFromVendorSlot uses individual quantity, so blindly copying donor
+count 1 would have different behavior. The bundle must fit one native stack and
+leave at most two carried stacks of the requested ID. This bound does not compare
+better supplies or aggregate all food/drink variants; the human chooses the item.
+
+The donor's native purchase call retains stock, conditions, reputation/price aura
+discounts, personal-money payment and storage admission. No gold cheat, item/token/
+currency cost, forced storage, auto-equip, retries or automatic shopping is added.
+Replies compare carried counts and copper spent; a request or the native boolean
+alone does not prove an award or saved inventory. Free-money/reserve policy remains
+a prerequisite for automatic resupply, and safe selling still needs full usage
+classification. Unknown items are not sellable by this feature.
+
+Tests cover exact numeric parsing/overflow/NUL, native bundle bounds and copied
+item identity, while existing repair tests exercise the shared mailbox fencing.
+Windows full-script worldserver/tests-common built and passed 436/436, including
+the three new purchase tests and existing shared-mailbox repair tests. Evidence:
+build-both/Testing/Temporary/LastTest.log. Linux and client purchase validation
+remain pending. Earlier release build counts apply to their source snapshots.
+
 ## Selected-NPC maintenance follow-up — 2026-10-11
 
 Fetched donor remote master at `79bd428115c8f33b74b13de23b133d49c3f75c60`.

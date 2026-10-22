@@ -30,7 +30,8 @@ Playerbots.MultiBot.Enabled = 0
 Playerbots.Dev.Enabled = 0
 
 # Console-only disposable level-20 role fixture preparation. Only configured
-# slots; native map-thread talents/equipment/items, no population or DB edits.
+# slots or online managed GUIDs; native map-thread talents/equipment/items,
+# no population creation or direct DB edits. Includes Rogue/Hunter roles.
 # Never enable on a production realm. See the matching core's party fixture.
 Playerbots.Dev.Fixture20.Enabled = 0
 
@@ -102,6 +103,16 @@ Playerbots.Loot.Corpses.Enabled = 0
 #        Default:     0 - (Existing companion Warrior behavior)
 
 Playerbots.Dev.EngineWarriorCombat = 0
+
+# Connected Rogue melee baseline: builders, target-qualified combo finishers,
+# Slice and Dice, Kick and shared movement/targeting. Native learned spells,
+# costs, weapons and cooldowns remain authoritative. No poison provisioning,
+# stealth/openers or full specialization parity; Subtlety uses generic fallback.
+Playerbots.Dev.EngineRogueCombat = 0
+
+# Native focus/ranged Hunter baseline and control of an existing active pet.
+# No pet creation/taming, Wrath ammo/mana/happiness, advanced traps or kiting.
+Playerbots.Dev.EngineHunterCombat = 0
 
 #
 #    Playerbots.Dev.EngineMageCombat
@@ -319,3 +330,22 @@ Playerbots.Diagnostics.Actions.Enabled = 0
 # Explicit whisper/party repair at the human's selected nearby repair NPC.
 # Uses native repair-all and the bot's own funds; no guild-bank or money cheat.
 Playerbots.Maintenance.Repair.Enabled = 0
+
+# Explicit buy <numeric item ID> at the selected nearby vendor. One native
+# food/drink/healing-potion/mana-potion/bandage bundle, gold-only, bot funds.
+# At most two carried stacks of that ID; potion usability classifier applies.
+# No currency/token costs, automatic shopping, vendor discovery or money cheat.
+# buy vendor chooses needed supplies in those five categories from up to 128 rows,
+# at most 10 bundles per category (50 total); no automatic bandage use is added.
+# Fresh current/better stock checks per purchase. Human request, not autonomy.
+Playerbots.Maintenance.Buy.Enabled = 0
+
+# Separate native sale opt-in: sell vendor sells up to eight qualified plain
+# gray misc/junk stacks at the selected nearby vendor. No equipment/materials,
+# professions/guild/quest/unknown needs, effects, affixes, bindings or special flags.
+# Uses native finite buyback; not an automatic sweep or rollback guarantee.
+Playerbots.Maintenance.Sell.Enabled = 0
+# trainer lists up to 12 learnable offers in a 128-row default class-trainer scan.
+# trainer learn / train all attempt at most 16 purchases; train <ID> selects one.
+# Native eligibility/payment/learning; no profession initialization or auto travel.
+Playerbots.Maintenance.Train.Enabled = 0

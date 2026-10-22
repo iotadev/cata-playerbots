@@ -48,6 +48,9 @@ TEST_CASE("Playerbot fallback routes unassigned DPS Warriors without pretending 
     REQUIRE(FallbackValue(CLASS_MAGE, 0, true, false, true) == nullptr);
     REQUIRE(FallbackValue(CLASS_PRIEST, 0, true, true, false) == nullptr);
     REQUIRE(FallbackValue(CLASS_ROGUE, 0, true, true, true) == nullptr);
+    REQUIRE(std::string(FallbackValue(CLASS_ROGUE, 0, false, false, false, true)) == "dps target");
+    REQUIRE(FallbackValue(CLASS_HUNTER, 0, true, true, true, true) == nullptr);
+    REQUIRE(std::string(FallbackValue(CLASS_HUNTER, 0, false, false, false, false, true)) == "dps target");
 }
 
 TEST_CASE("Playerbot main tank retention requires explicit assignment and multiple living tanks", "[playerbot][target]")

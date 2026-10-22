@@ -475,7 +475,14 @@ TEST_CASE("Playerbot spec policy selects only implemented native Cata routes", "
     REQUIRE(std::string(PlayerbotSpec::CombatStrategy(CLASS_MAGE, TALENT_TREE_MAGE_FIRE)) == "fire");
     REQUIRE(std::string(PlayerbotSpec::CombatStrategy(CLASS_MAGE, 0)) == "mage");
     REQUIRE(std::string(PlayerbotSpec::CombatStrategy(CLASS_PRIEST, TALENT_TREE_PRIEST_SHADOW)) == "heal");
-    REQUIRE(PlayerbotSpec::CombatStrategy(CLASS_ROGUE, 0) == nullptr);
+    REQUIRE(std::string(PlayerbotSpec::CombatStrategy(CLASS_ROGUE, 0)) == "rogue");
+    REQUIRE(std::string(PlayerbotSpec::CombatStrategy(CLASS_ROGUE, TALENT_TREE_ROGUE_SUBTLETY)) == "rogue");
+    REQUIRE(std::string(PlayerbotSpec::CombatStrategy(CLASS_ROGUE, TALENT_TREE_ROGUE_COMBAT)) == "combat");
+    REQUIRE(std::string(PlayerbotSpec::CombatStrategy(CLASS_ROGUE, TALENT_TREE_ROGUE_ASSASSINATION)) == "assassination");
+    REQUIRE(std::string(PlayerbotSpec::CombatStrategy(CLASS_HUNTER, 0)) == "hunter");
+    REQUIRE(std::string(PlayerbotSpec::CombatStrategy(CLASS_HUNTER, TALENT_TREE_HUNTER_BEAST_MASTERY)) == "beast mastery");
+    REQUIRE(std::string(PlayerbotSpec::CombatStrategy(CLASS_HUNTER, TALENT_TREE_HUNTER_MARKSMANSHIP)) == "marksmanship");
+    REQUIRE(std::string(PlayerbotSpec::CombatStrategy(CLASS_HUNTER, TALENT_TREE_HUNTER_SURVIVAL)) == "survival");
 }
 
 TEST_CASE("Playerbot spec refresh replaces combat sibling and preserves shared strategies", "[playerbot][spec]")

@@ -35,7 +35,7 @@ void PlayerbotRepair::Update(WorldSession& session, Mailbox& mailbox)
     Player* human = ObjectAccessor::FindConnectedPlayer(ObjectGuid::Create<HighGuid::Player>(request->Requester));
     bool attached = session.GetServerOriginFollowTargetGuidLow() == request->Requester ||
         session.GetServerOriginPartyControllerGuidLow() == request->Requester;
-    bool eligible = PlayerbotModuleRepairEnabled() && Fresh(*request, getMSTime()) && session.IsServerOrigin() &&
+    bool eligible = !request->Item && PlayerbotModuleRepairEnabled() && Fresh(*request, getMSTime()) && session.IsServerOrigin() &&
         !session.PlayerLoading() && !session.isLogingOut() && bot && bot->IsInWorld() && bot->IsAlive() &&
         !bot->IsBeingTeleported() && !bot->IsInCombat() && !bot->IsInFlight() && !bot->IsNonMeleeSpellCast(false) &&
         attached && human && human->GetSession() && !human->GetSession()->IsServerOrigin() && human->IsInWorld() &&

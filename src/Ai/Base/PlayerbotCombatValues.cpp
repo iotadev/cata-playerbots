@@ -92,7 +92,8 @@ protected:
         {
             // The role follows implemented strategies, not unported Shadow/talent roles.
             if (!PlayerbotDpsEstimate::BasicDps(member->getLevel()) ||
-                (member->getClass() != CLASS_WARRIOR && member->getClass() != CLASS_MAGE && member->getClass() != CLASS_PRIEST))
+                (member->getClass() != CLASS_WARRIOR && member->getClass() != CLASS_MAGE &&
+                 member->getClass() != CLASS_PRIEST && member->getClass() != CLASS_ROGUE && member->getClass() != CLASS_HUNTER))
                 return 0.0f;
             dps += PlayerbotDpsEstimate::Contribution(member->getLevel(), MixedGearScore(*member),
                 IsImplementedTank(*member), PlayerbotRoles::IsHealer(*member));

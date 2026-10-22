@@ -13,7 +13,7 @@ enum class Usage : uint8
     Quest = 5, Skill = 6, Use = 7, GuildTask = 8, Disenchant = 9,
     Auction = 10, Keep = 11, Vendor = 12, Ammo = 13, Unknown = 255
 };
-enum class Scope : uint8 { Unavailable, ConsumableStock, CarriedEquipment, TemplateEquipment, NativeLootEquipment, QuestLog };
+enum class Scope : uint8 { Unavailable, ConsumableStock, CarriedEquipment, TemplateEquipment, NativeLootEquipment, QuestLog, ProfessionRetention, OwnedDisenchant, BagCapacity };
 struct Fact
 {
     Usage Result = Usage::Unknown;

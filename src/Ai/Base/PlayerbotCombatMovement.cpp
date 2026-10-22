@@ -24,9 +24,11 @@ bool Ready(PlayerbotAI* ai, Step step, bool refresh = false)
     Player* owner = ai ? ai->GetController() : nullptr;
     Creature* target = ai ? ai->GetCurrentTarget() : nullptr;
     if (!bot || !owner || !target || ai->IsStaying()) return false;
-    bool caster = bot->getClass() == CLASS_MAGE;
-    bool enabled = caster ? PlayerbotModuleEngineMageCombatEnabled() :
-        bot->getClass() == CLASS_WARRIOR && PlayerbotModuleEngineWarriorCombatEnabled();
+    bool hunter = bot->getClass() == CLASS_HUNTER;
+    bool caster = bot->getClass() == CLASS_MAGE || hunter;
+    bool enabled = hunter ? PlayerbotModuleEngineHunterCombatEnabled() : caster ? PlayerbotModuleEngineMageCombatEnabled() :
+        ((bot->getClass() == CLASS_WARRIOR && PlayerbotModuleEngineWarriorCombatEnabled()) ||
+         (bot->getClass() == CLASS_ROGUE && PlayerbotModuleEngineRogueCombatEnabled()));
     if (!enabled || (caster && (step == Step::Reach || step == Step::Behind)) ||
         (!caster && step == Step::ReachSpell) || !bot->IsInWorld() || !owner->IsInWorld() || !target->IsInWorld() ||
         !bot->IsAlive() || !owner->IsAlive() || !target->IsAlive() ||
@@ -36,7 +38,7 @@ bool Ready(PlayerbotAI* ai, Step step, bool refresh = false)
         !bot->IsValidAttackTarget(target) ||
         !bot->IsWithinDistInMap(owner, 35.0f) || !bot->IsWithinDistInMap(target, 35.0f) ||
         !bot->CanSeeOrDetect(target) || !bot->IsWithinLOSInMap(target) ||
-        !CanMove(*bot) || bot->IsMounted() || bot->IsNonMeleeSpellCast(false) ||
+        !CanMove(*bot) || bot->IsMounted() || bot->IsNonMeleeSpellCast(false, false, hunter) ||
         ai->GetRestSpellId() || ai->LootRequests().Pending() || ai->LootPursuit().Active())
         return false;
     if (refresh) return caster;
@@ -141,7 +143,7 @@ bool PlayerbotCombatMovement::FaceForAttack(Player& bot, Creature& target)
         bot.GetMap() != target.GetMap() || bot.IsBeingTeleported() || target.IsControlledByPlayer() ||
         PlayerbotTargetSelection::IsProtectedTarget(target) ||
         !bot.IsValidAttackTarget(&target) || !CanMove(bot) || bot.IsMounted() ||
-        bot.IsNonMeleeSpellCast(false))
+        bot.IsNonMeleeSpellCast(false, false, bot.getClass() == CLASS_HUNTER))
         return false;
     constexpr float arc = 2.0f * float(M_PI) / 3.0f;
     if (!bot.HasInArc(arc, &target)) bot.SetFacingToObject(&target);

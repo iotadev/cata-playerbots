@@ -34,6 +34,21 @@ inline char const* CombatStrategy(uint8 playerClass, uint32 primaryTree)
             }
         case CLASS_PRIEST:
             return "heal"; // explicit fallback until donor Priest specs are ported
+        case CLASS_HUNTER:
+            switch (primaryTree)
+            {
+                case TALENT_TREE_HUNTER_BEAST_MASTERY: return "beast mastery";
+                case TALENT_TREE_HUNTER_MARKSMANSHIP: return "marksmanship";
+                case TALENT_TREE_HUNTER_SURVIVAL: return "survival";
+                default: return "hunter";
+            }
+        case CLASS_ROGUE:
+            switch (primaryTree)
+            {
+                case TALENT_TREE_ROGUE_COMBAT: return "combat";
+                case TALENT_TREE_ROGUE_ASSASSINATION: return "assassination";
+                default: return "rogue"; // Subtlety/openers are not yet ported.
+            }
         default:
             return nullptr;
     }

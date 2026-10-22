@@ -582,6 +582,30 @@ public:
         std::string guidText;
         std::string extra;
         input >> action >> guidText;
+        if (action == "fixture20")
+        {
+            uint32 guidLow = 0;
+            auto [end, error] = std::from_chars(guidText.data(), guidText.data() + guidText.size(), guidLow);
+            std::string roleText;
+            input >> roleText >> extra;
+            auto role = PlayerbotDevFixture::ParseRole(roleText);
+            bool valid = !guidText.empty() && error == std::errc{} && end == guidText.data() + guidText.size() &&
+                guidLow && role && extra.empty();
+            if (!valid)
+            {
+                handler->SendSysMessage("Usage: server playerbotdev managed fixture20 <GUID> <protection|arms|frost|holy|rogue|hunter>");
+                handler->SetSentErrorMessage(true);
+                return false;
+            }
+            ObjectGuid guid = ObjectGuid::Create<HighGuid::Player>(guidLow);
+            WorldSession* bot = sWorld->FindServerOriginPlayerbot(guid);
+            bool accepted = PlayerbotManagedRoster::Find(guidLow) && bot && bot->GetPlayer() &&
+                PlayerbotDevFixture::Request(guid, *role);
+            handler->PSendSysMessage("Managed Playerbot fixture20 %s; PB-FIXTURE reports map-thread completion.",
+                accepted ? "requested" : "rejected (requires fixture flag and online managed bot)");
+            if (!accepted) handler->SetSentErrorMessage(true);
+            return accepted;
+        }
         if (action == "enroll" || action == "provision" || action == "factory-status")
         {
             uint32 accountId = 0;

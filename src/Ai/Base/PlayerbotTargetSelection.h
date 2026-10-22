@@ -20,7 +20,7 @@ inline bool CrowdControlAllows(bool polymorphed, bool charmed, bool feared, bool
 }
 bool IsProtectedTarget(Creature const& target);
 inline char const* FallbackValue(std::uint8_t playerClass, std::uint32_t talentTree,
-    bool warriorEnabled, bool mageEnabled, bool priestEnabled)
+    bool warriorEnabled, bool mageEnabled, bool priestEnabled, bool rogueEnabled = false, bool hunterEnabled = false)
 {
     switch (playerClass)
     {
@@ -28,6 +28,8 @@ inline char const* FallbackValue(std::uint8_t playerClass, std::uint32_t talentT
             return warriorEnabled ? (talentTree == TALENT_TREE_WARRIOR_PROTECTION ? "tank target" : "dps target") : nullptr;
         case CLASS_MAGE: return mageEnabled ? "dps target" : nullptr;
         case CLASS_PRIEST: return priestEnabled ? "dps target" : nullptr;
+        case CLASS_ROGUE: return rogueEnabled ? "dps target" : nullptr;
+        case CLASS_HUNTER: return hunterEnabled ? "dps target" : nullptr;
         default: return nullptr;
     }
 }

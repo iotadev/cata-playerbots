@@ -24,6 +24,17 @@ The current development target is a human-led Warrior/Mage/Priest party.
   routes. Priest support covers healing, buffs, disease cures, resurrection and
   conservative damage. Shared roles feed target selection, threat, positioning
   and support. Class/spec rotations and high-level spell coverage remain incomplete.
+- Rogue baseline connects native class admission, melee movement/targeting,
+  energy and current-target combo builders/finishers, Slice and Dice and Kick.
+  Combat and Assassination have starter routes; Subtlety uses a generic fallback.
+  Enable `Playerbots.Dev.EngineRogueCombat` explicitly. Poison provisioning,
+  stealth/openers and Rogue gear scoring are not yet ported; live behavior is
+  untested. Build evidence is recorded in PORTING.md.
+- Hunter baseline adds focus-based ranged combat, native Auto Shot and
+  starter spec routes, plus summon/revive/mend and controlled combat/follow for
+  an existing owned pet. Its separate `Playerbots.Dev.EngineHunterCombat` gate
+  defaults off. It does not create/tame pets or provide complete rotations,
+  advanced traps/kiting or Hunter gear scoring. Hunter/pet gameplay is untested.
 - Follow, hold, attack, stop, range controls, strategy queries and manual rebuff
   use ordinary whispers and party/raid chat. Party chat respects raid subgroups.
   Optional slices include saved-position stay, learned ground mounts, ready
@@ -49,17 +60,21 @@ travel, group formation and full dungeon/class parity remain future work.
 
 ## Validation
 
-The October 2026 milestone combines party coordination, native gear/loot and
-human-led quest work. Release qualification is:
+The October 2026 milestone combines party coordination, native gear/loot,
+human-led quests, maintenance and Rogue/Hunter foundations. Dated native
+qualification is:
 
 | Source scope | Build result |
 | --- | --- |
-| Windows, all installed modules enabled | worldserver/tests-common built; 431/431 tests passed |
-| Linux, complete current source and observer integration | worldserver/tests-common built; 431/431 tests passed |
-| Windows, all three installed optional modules disabled | worldserver/tests-common built; 19/19 core tests passed |
+| Windows, October 13 six-role fixture source, all installed modules enabled | worldserver/tests-common built; 476/476 tests passed |
+| Linux, October 13 six-role fixture source, all installed modules enabled | worldserver/tests-common built; 476/476 tests passed |
+| Windows, all three installed optional modules disabled | worldserver/tests-common built; 20/20 core tests passed |
 
 Linux builds use Ubuntu 22.04/GCC 11.4 with normal PCH; Linux server runtime remains untested.
 [PORTING.md](PORTING.md) records intermediate builds, donor revisions and adaptations.
+Later helper/documentation cleanup and the previously isolated no-PCH include
+correction do not constitute a new full native build. Rogue/Hunter gameplay and
+the expanded outdoor raid replay remain unverified.
 
 Outdoor and Ragefire checks observed four-bot engagement, Warrior role actions,
 Mage damage, Priest healing, tank aggro recovery, native corpse opening and
@@ -80,8 +95,9 @@ scope and unknown inputs. An optional native need/greed/pass adapter now connect
 their roll-choice rules locally, with its
 gate off. Windows validation and one controlled native decision/award check passed:
 Testone needed, Testtwo greeded, casters passed, and the saved award was verified.
-Broader runtime coverage remains pending. Automatic equipping, purchases and
-disenchant classification remain ahead.
+Broader runtime coverage remains pending. Explicit bounded equipment changes and
+selected-vendor recovery purchases are implemented; autonomous equipment/supply
+management and broader disenchant/loot classification remain ahead.
 Template comparison does not establish the identity or eligibility of an actual
 loot roll. The voting adapter additionally binds and rechecks native roll facts.
 
@@ -123,19 +139,75 @@ It still needs sustained-party qualification before broader use.
 
 ## Chat and addon controls
 
+Local carried item usage also recognizes disenchant-retention facts for one
+owned, qualified non-upgrade item, using native enchanting rank, rarity and
+binding. Upgrades, repair needs, equipped/bank items, ambiguous copies and unknown
+comparisons keep their existing classifications. This is read-only retention
+classification; no disenchanting action is enabled. Qualified junk sales have a
+separate opt-in below. PORTING.md records current
+validation and the native admission work required before consuming an item.
+Windows and Linux worldserver/tests-common passed 448/448 for this follow-up;
+client retention behavior and Linux realm runtime remain untested.
+
+The local item-usage reader identifies known profession tools, skill-line
+materials and unread recipes for a human-controlled bot before stock/equipment
+classification. It uses native skills and learned-spell metadata, including Cata
+recipe learning routes. Material facts use the native skill-line catalog and
+bounded reagent/create-item inspection, preserving donor gathering associations.
+Recipe-template fallback uses a bounded copied skill/item index built at startup,
+rebuilt on config reload and cleared on shutdown. Recipe-only facts remain tied
+to the recipe's profession. Unknown and capped/missing facts remain unresolved.
+Windows/Linux worldserver/tests-common passed 454/454 for this catalog follow-up;
+native startup/reload publication and client behavior remain unobserved.
+These facts do not authorize general sales, crafting or training; PORTING.md records
+the current source and qualification limits.
+Windows and Linux worldserver/tests-common passed 446/446 for this profession
+follow-up; client profession behavior and Linux realm runtime remain untested.
+
 ### Maintenance
 
-With `Playerbots.Maintenance.Repair.Enabled = 1`, select a nearby repair NPC and
-whisper a controlled bot `repair`, or use party/raid chat with the usual subgroup
-scope. Both human and bot must be eligible to interact with the captured NPC.
-The request expires after five seconds and rechecks control, location and idle
-state on the world owner. Native repair-all uses bot funds and reputation discount;
+The local follow-up adds `sell vendor` under the separate default-off
+`Playerbots.Maintenance.Sell.Enabled` gate. At the selected nearby vendor it
+sells at most eight owned backpack/bag stacks of plain gray misc/junk. This
+limited subset requires neither player to have relevant professions or a guild,
+complete quest metadata with no active item reference, and no bindings, effects,
+affixes, scripts or special flags. Completed-quest turn-in stacks stay protected.
+Equipment, materials and unresolved items are not eligible. The native handler
+owns inventory/money/buyback; finite buyback is not rollback. Replies report
+observed removal and money gains, not saved inventory. Client sale qualification
+is pending; PORTING.md records current build evidence.
+Windows/Linux worldserver/tests-common passed 452/452 for this native sale
+follow-up. Client sale/persistence and Linux realm runtime remain untested.
+
+With `Playerbots.Maintenance.Repair.Enabled = 1`, select a nearby repair NPC
+and whisper a controlled bot `repair`, or use party/raid chat with the usual
+subgroup scope. Native repair-all uses bot funds and reputation discount;
 insufficient money can leave partial repairs. Replies report observed equipped
-durability and copper spent. Client qualification is pending. Selling, purchases
-and automatic NPC travel remain ahead.
-The October 11 follow-up built Windows worldserver/tests-common and passed
-433/433 tests. Its Linux validation remains pending; the release table above
-describes the published October 9 source.
+durability and spending.
+
+The local purchase follow-up uses the independent default-off
+`Playerbots.Maintenance.Buy.Enabled` gate. At a selected nearby vendor,
+`buy <numeric item ID>` requests one native food/drink/recovery-supply bundle,
+capped at two carried stacks of that ID. `buy vendor` chooses needed food,
+drink, healing potions, mana potions and bandages independently using
+donor current/better-stock policy, higher-level usable items first. It scans
+at most 128 rows and attempts at most ten bundles per type, rechecking need
+after each. Native blocking stops that type without lower-rank fallback.
+Potions must pass the existing combat-potion classifier; flasks and channeled
+potions are excluded. Native item prerequisites still apply. Stocking bandages
+does not add automated bandage use; potion use keeps its separate enable gate.
+
+Both players must be eligible to interact with the captured NPC. Requests expire
+after five seconds and recheck control, location and idle state on the world
+owner. Cata owns vendor conditions, stock, discounts, payment and storage.
+Item/currency costs are excluded. Summaries report observed inventory increases
+and spending, not saved inventory or a fully stocked guarantee. The donor lets
+bots with a real human master use current money. Autonomous spending reserves,
+NPC discovery, scheduling and general shopping remain separate.
+
+The preceding maintenance snapshot built Windows and Linux worldserver/tests-common
+and passed 439/439 tests each. Client maintenance and Linux realm runtime remain untested. PORTING.md records
+evidence; the release table above describes the published October 9 source.
 
 ### Human-led quests
 
@@ -190,6 +262,34 @@ retrying a toggle. Completed changes are not rolled back.
 
 The full donor addon contains features the server has not ported. Its presence
 does not imply class/talent data parity or support for every button.
+
+## Bag-capacity inspection
+
+Ordinary bag-capacity improvements are recognized by shared item-usage and
+quest-reward inspection. This is positive retention only: specialized bags and
+unknown layouts are not replacements. Explicit `gear apply` can now fill one
+empty carried bag slot or upgrade the smallest qualified ordinary carried bag
+as a fallback after gear, using an owned empty ordinary backpack candidate.
+Cata owns equip/storage checks; the displaced empty bag
+stays in the backpack. Confirmation checks bag/content GUIDs, counts and affix
+facts. Existing equip gates apply. Populated replacement requires the matching
+local core's swap-scoped storage adaptation; generic storage remains guarded.
+The updated native path is not yet client-qualified. Specialized/affixed bags, bank/nested/busy
+layouts and bag loot-vote/purchase support remain excluded. Native replacement
+and persistence still need client qualification.
+
+## Class training
+
+Local class training supports `trainer` to list learnable offers,
+`trainer learn` for a bounded purchase batch, or `train <numeric trainer spell ID>` at
+the human's selected nearby default class trainer, behind the independent
+default-off `Playerbots.Maintenance.Train.Enabled` gate. Native Cata handlers
+own eligibility, payment and learning. Inspection scans 128 rows and shows up to
+12 offers. Batches attempt at most 16 initially available offers, cheapest first.
+Funds/state/caps or unconfirmed learning stop the batch without retry/rollback.
+Trainer travel and profession setup are not implemented; addon trainer UI is not connected.
+Replies distinguish newly observed learned spells from submission. Client
+training and persistence still need qualification; see PORTING.md.
 
 ## Contributing and provenance
 
