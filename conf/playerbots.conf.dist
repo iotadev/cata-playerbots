@@ -62,7 +62,7 @@ Playerbots.Dev.EnginePartyBuff = 0
 # Optional donor-shaped carried food/drink recovery for supported companion classes.
 # Uses native item use; no item creation, cheats, purchases or population automation.
 # Starts below 40% health / 20% mana, pauses follow, resumes on completion/interruption.
-# Default-off pending the next bundled mixed-party client check.
+# Optional; default disabled. See README.md for dated gameplay coverage.
 Playerbots.Rest.Enabled = 0
 
 # Optional carried, instant healing/mana potions in combat for supported classes.
@@ -74,14 +74,14 @@ Playerbots.Potions.Enabled = 0
 # Optional spec-aware Mage self-armor upkeep through the existing engine.
 # Arcane prefers Mage Armor; other/unspecialized bots prefer Molten Armor.
 # Falls back to learned Mage/Frost Armor; never grants an unlearned spell.
-# Default-off pending the next bundled mixed-party client check.
+# Optional; default disabled. See README.md for dated gameplay coverage.
 Playerbots.Mage.Armor.Enabled = 0
 
-# Temporary native auto-pass policy until equipment-aware donor roll evaluation
-# is ported. Applies to new Group Loot / Need Before Greed rolls, not existing rolls.
+# Optional unconditional native auto-pass policy. Keep disabled when using
+# the separately gated equipment-aware Playerbots.Loot.Rolls.Enabled adapter. Applies to new Group Loot / Need Before Greed rolls, not existing rolls.
 # Does not loot corpses, award items or change another player's preference.
 # Disabling restores each companion's preference from before this feature enabled.
-# Default-off pending a bundled party loot check.
+# Default disabled; this is independent of equipment-aware voting.
 Playerbots.Loot.PassOnGroupLoot = 0
 
 # Initial nearby-corpse looting through native permissions, money and item storage.
@@ -90,15 +90,15 @@ Playerbots.Loot.PassOnGroupLoot = 0
 # with a ten-second timeout. No area scans or roaming to distant loot.
 # Currency, gathering, skinning and equipment-aware loot policies are not included.
 # Native inventory failures use bounded 30-second per-corpse attempt backoff.
-# Default-off pending the bundled mixed-party loot/recovery check.
+# Optional; default disabled. Basic corpse opening has been observed.
 Playerbots.Loot.Corpses.Enabled = 0
 
 #
 #    Playerbots.Dev.EngineWarriorCombat
 #        Description: Experimental Warrior combat route through the imported
 #                     Playerbots engine. Protection talents use a bounded tank
-#                     strategy with party-target Taunt; other or unset trees
-#                     use a generic low-level melee fallback. Replaces only
+#                     strategy with party-target Taunt; Arms/Fury have starter
+#                     routes and unset trees use a generic fallback. Replaces only
 #                     the existing Warrior spell priority. Restart to compare.
 #        Default:     0 - (Existing companion Warrior behavior)
 
@@ -117,8 +117,8 @@ Playerbots.Dev.EngineHunterCombat = 0
 #
 #    Playerbots.Dev.EngineMageCombat
 #        Description: Experimental Mage combat route through the imported
-#                     Playerbots engine. Frost talents use the bounded Frost
-#                     strategy; other or unset trees use the generic fallback.
+#                     Playerbots engine. Frost/Fire/Arcane use starter spec
+#                     strategies; unset trees use the generic fallback.
 #                     This replaces only the existing Mage spell priority.
 #                     Restart to compare paths reliably.
 #        Default:     0 - (Existing companion Mage behavior)
@@ -272,7 +272,8 @@ Playerbots.Healing.SaveMana.Enabled = 0
 Playerbots.Equipment.StarterScore.Enabled = 0
 
 # Explicit gear apply command: at most one safe native inventory change while idle.
-# Requires StarterScore. No automatic gear loop, purchases, bags or loot votes.
+# Requires StarterScore. Includes bounded ordinary carried-bag fill/upgrade.
+# No automatic gear loop, purchases or loot votes; native storage rules apply.
 Playerbots.Equipment.StarterEquip.Enabled = 0
 
 # Optional native party rolls for supported starter gear/consumables. Actual
@@ -292,15 +293,16 @@ Playerbots.Dev.LootRollFixture.Enabled = 0
 # Turn-in dialogs are not handled by this gate.
 Playerbots.Quest.AcceptShared.Enabled = 0
 
-# Explicit accept <quest ID> whisper/party command for the human's selected
-# nearby creature/gameobject quest giver. One native operation per bot; queued
-# intent expires after 5 seconds and rechecks authority/map/instance/interaction.
-# No accept-all, quest links, item/self givers, reward or direct AddQuest fallback.
+# Explicit accept <quest ID/link> or accept * for the human's selected nearby
+# creature/gameobject quest giver. Batch copies at most 25 offers and rechecks
+# authority/map/instance/interaction per quest; queued intent expires after 5 seconds.
+# No item/self givers, reward or direct AddQuest fallback.
 Playerbots.Quest.AcceptNpc.Enabled = 0
 
-# Explicit reward <quest ID> <item ID> from the selected nearby quest giver.
-# Item 0 only for quests without choice items. Ordinary completed, non-repeatable
-# quests only; native checks grant rewards. No auto-selection or forced completion.
+# Explicit reward <quest ID/link> <item ID/link> at the selected nearby giver.
+# Item 0 only for no-choice rewards. reward * batches up to 25 completed quests
+# with zero/one choice; multiple choices remain manual. Native checks grant rewards.
+# No forced completion or automatic travel.
 Playerbots.Quest.Reward.Enabled = 0
 
 # Read-only quests whisper/party report: up to 25 active quests, native status,
